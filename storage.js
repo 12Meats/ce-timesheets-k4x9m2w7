@@ -7,20 +7,39 @@
 
   function emptyData() { return { version: 1, pin: null, workers: [], entries: {} }; }
 
+  function isMinutes(v) { return Number.isInteger(v) && v >= 0 && v <= 1439; }
+
+  // Fail-closed validation: returns the parsed data only if every level of the
+  // shape checks out; returns null for anything else. Must NEVER throw — this
+  // guards both file imports and every app boot via load().
   function validateImport(text) {
     let d;
     try { d = JSON.parse(text); } catch { return null; }
-    if (!d || d.version !== 1) return null;
-    if (!('pin' in d) || !Array.isArray(d.workers) || typeof d.entries !== 'object' || d.entries === null) return null;
-    for (const w of d.workers) {
-      if (typeof w.id !== 'string' || typeof w.name !== 'string') return null;
-    }
-    for (const days of Object.values(d.entries)) {
-      for (const e of Object.values(days)) {
-        if (typeof e.start !== 'number' || typeof e.end !== 'number') return null;
+    try {
+      if (!d || typeof d !== 'object' || Array.isArray(d) || d.version !== 1) return null;
+      if (d.pin !== null && !(typeof d.pin === 'string' && /^\d{4}$/.test(d.pin))) return null;
+      if (!Array.isArray(d.workers)) return null;
+      if (typeof d.entries !== 'object' || d.entries === null || Array.isArray(d.entries)) return null;
+      const ids = new Set();
+      for (const w of d.workers) {
+        if (!w || typeof w !== 'object' || Array.isArray(w)) return null;
+        if (typeof w.id !== 'string' || w.id === '' || typeof w.name !== 'string') return null;
+        if (ids.has(w.id)) return null;
+        ids.add(w.id);
+        if (w.rate != null && !(typeof w.rate === 'number' && isFinite(w.rate) && w.rate >= 0)) return null;
+        if (w.usualStart != null && !isMinutes(w.usualStart)) return null;
       }
-    }
-    return d;
+      for (const [workerId, days] of Object.entries(d.entries)) {
+        if (!ids.has(workerId)) return null;
+        if (!days || typeof days !== 'object' || Array.isArray(days)) return null;
+        for (const [date, e] of Object.entries(days)) {
+          if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return null;
+          if (!e || typeof e !== 'object' || Array.isArray(e)) return null;
+          if (!isMinutes(e.start) || !isMinutes(e.end) || e.end <= e.start) return null;
+        }
+      }
+      return d;
+    } catch { return null; }
   }
 
   // date math on ISO strings, timezone-safe (construct at noon to dodge DST edges)
@@ -51,8 +70,10 @@
 
   // browser-only persistence (skipped under Node)
   function load() {
-    const raw = (typeof localStorage !== 'undefined') && localStorage.getItem(KEY);
-    return raw ? (validateImport(raw) || emptyData()) : emptyData();
+    try {
+      const raw = (typeof localStorage !== 'undefined') && localStorage.getItem(KEY);
+      return raw ? (validateImport(raw) || emptyData()) : emptyData();
+    } catch { return emptyData(); }
   }
   function save(data) {
     if (typeof localStorage !== 'undefined') localStorage.setItem(KEY, JSON.stringify(data));

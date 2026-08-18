@@ -41,3 +41,24 @@ test('weekMinutes sums a worker week in minutes', () => {
   };
   assert.strictEqual(S.weekMinutes(d, 'x1', '2026-08-10'), 1028);
 });
+test('validateImport never throws on malformed-but-valid JSON shapes', () => {
+  assert.strictEqual(S.validateImport('{"version":1,"pin":null,"workers":[],"entries":{"x1":null}}'), null);
+  assert.strictEqual(S.validateImport('{"version":1,"pin":null,"workers":[null],"entries":{}}'), null);
+  assert.strictEqual(S.validateImport('{"version":1,"pin":null,"workers":[{"id":"a","name":"A"}],"entries":{"a":{"2026-08-10":null}}}'), null);
+});
+test('validateImport rejects orphaned entries, bad types, bad ranges', () => {
+  assert.strictEqual(S.validateImport('{"version":1,"pin":null,"workers":[],"entries":{"ghost":{"2026-08-10":{"start":1,"end":2}}}}'), null);
+  assert.strictEqual(S.validateImport('{"version":1,"pin":null,"workers":[{"id":"a","name":"A","rate":"oops","usualStart":null}],"entries":{}}'), null);
+  assert.strictEqual(S.validateImport('{"version":1,"pin":1234,"workers":[],"entries":{}}'), null);
+  assert.strictEqual(S.validateImport('{"version":1,"pin":null,"workers":[{"id":"a","name":"A"}],"entries":{"a":{"2026-08-10":{"start":-500,"end":99999}}}}'), null);
+  assert.strictEqual(S.validateImport('{"version":1,"pin":null,"workers":[{"id":"a","name":"A"},{"id":"a","name":"B"}],"entries":{}}'), null);
+  assert.strictEqual(S.validateImport('{"version":1,"pin":null,"workers":[{"id":"a","name":"A"}],"entries":{"a":{"garbage-key":{"start":390,"end":900}}}}'), null);
+});
+test('validateImport accepts null/missing rate and usualStart', () => {
+  assert.notStrictEqual(S.validateImport('{"version":1,"pin":"1234","workers":[{"id":"a","name":"A","rate":null,"usualStart":null}],"entries":{}}'), null);
+  assert.notStrictEqual(S.validateImport('{"version":1,"pin":null,"workers":[{"id":"a","name":"A"}],"entries":{}}'), null);
+});
+test('mondayOf is stable across DST-transition weeks', () => {
+  assert.strictEqual(S.mondayOf('2026-03-08'), '2026-03-02'); // US spring-forward Sunday
+  assert.strictEqual(S.mondayOf('2026-11-01'), '2026-10-26'); // US fall-back Sunday
+});
