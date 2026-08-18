@@ -1471,5 +1471,33 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 if ('serviceWorker' in navigator) {
-  navigator.serviceWorker.register('sw.js').catch(() => {});
+  // Home-screen apps on iOS resume from the background far more often than
+  // they cold-launch, and iOS's own periodic SW update check is unreliable
+  // there. So we don't just register-and-forget: pull for updates right
+  // after registering, and again every time the app comes back to the
+  // foreground.
+  let reloadedForNewWorker = false; // guards against a reload loop
+
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('sw.js')
+      .then((reg) => {
+        reg.update().catch(() => {});
+        document.addEventListener('visibilitychange', () => {
+          if (document.visibilityState === 'visible') {
+            reg.update().catch(() => {});
+          }
+        });
+      })
+      .catch(() => {});
+  });
+
+  // When a new worker takes control, reload once to pick it up. Everything
+  // the user has already committed lives in localStorage (instant-save
+  // design) — a reload here can only lose an incomplete, not-yet-saved
+  // in-panel time entry, which is an acceptable trade for staying current.
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    if (reloadedForNewWorker) return;
+    reloadedForNewWorker = true;
+    location.reload();
+  });
 }
