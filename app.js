@@ -691,12 +691,20 @@ function formatShortDate(iso) {
 }
 
 // In-memory per-day draft for the week currently on screen, keyed by ISO
-// date: { start: minutes|null, end: minutes|null }. Lives outside the
-// storage contract deliberately — an invalid/incomplete pair (e.g. end <=
-// start) must stay visible with its "end before start" note even though it
-// is never written to state.data.entries. Rebuilt only when the worker or
-// week being viewed changes (see weekDraftKey below), so edits survive
-// re-renders triggered by promptTime while browsing the same week.
+// date: { start: minutes|null, end: minutes|null, lunch: minutes|undefined }.
+// Lives outside the storage contract deliberately — an invalid/incomplete
+// pair (e.g. end <= start) must stay visible with its "end before start"
+// note even though it is never written to state.data.entries. Rebuilt only
+// when the worker or week being viewed changes (see weekDraftKey below), so
+// edits survive re-renders triggered by promptTime while browsing the same
+// week.
+//
+// lunch handling: a day copied from an existing stored entry carries that
+// entry's lunch value AS IS, including 0 or undefined (legacy entries
+// written before this feature never had a lunch key — undefined means "no
+// deduction", never guessed at). A day with no stored entry yet is preloaded
+// with lunch: 30 so the first time it becomes a complete pair, it commits
+// with the default 30-minute deduction already in place.
 let weekDraft = null;
 let weekDraftKey = null;
 
@@ -705,7 +713,7 @@ function buildWeekDraft(worker, mondayIso) {
   const draft = {};
   Store.weekDates(mondayIso).forEach((date) => {
     const e = stored[date];
-    draft[date] = { start: e ? e.start : null, end: e ? e.end : null };
+    draft[date] = { start: e ? e.start : null, end: e ? e.end : null, lunch: e ? e.lunch : 30 };
   });
   return draft;
 }
@@ -715,6 +723,13 @@ function buildWeekDraft(worker, mondayIso) {
 // date key is deleted entirely — absent = no work, never a half/wrong entry.
 // The validity predicate itself lives in PayMath.isValidPair so both the UI
 // and any future non-UI code (e.g. an import/export path) share one rule.
+//
+// lunch is written straight from the draft: for a brand-new complete entry
+// the draft was preloaded with 30 (see buildWeekDraft), and for an existing
+// entry whose times are being edited the draft's lunch was copied unchanged
+// from storage — so no special-casing is needed here for "new vs update".
+// The lunch chip's own handler flips entry.lunch before calling this, so
+// that path writes the toggled value the same way.
 function commitDay(worker, date) {
   const entry = weekDraft[date];
   const valid = PayMath.isValidPair(entry.start, entry.end);
@@ -724,7 +739,7 @@ function commitDay(worker, date) {
 
   if (valid) {
     if (!stored) state.data.entries[worker.id] = {};
-    state.data.entries[worker.id][date] = { start: entry.start, end: entry.end };
+    state.data.entries[worker.id][date] = { start: entry.start, end: entry.end, lunch: entry.lunch };
   } else {
     delete stored[date];
   }
@@ -880,8 +895,8 @@ function buildWeekDayRow(worker, date, shortName, fullName) {
 
   const hours = document.createElement('span');
   hours.className = 'week-day-hours';
-  const worked = PayMath.workedMinutes(entry.start, entry.end);
-  hours.textContent = worked != null ? PayMath.toDecimal(worked).toFixed(2) : '—';
+  const paid = PayMath.paidMinutes(entry.start, entry.end, entry.lunch);
+  hours.textContent = paid != null ? PayMath.toDecimal(paid).toFixed(2) : '—';
 
   top.appendChild(label);
   top.appendChild(times);
@@ -893,6 +908,25 @@ function buildWeekDayRow(worker, date, shortName, fullName) {
     note.className = 'week-day-note';
     note.textContent = 'End before start — not saved.';
     row.appendChild(note);
+  }
+
+  // Lunch toggle chip: only for a day with a complete, valid entry. Missing
+  // lunch (legacy days with no lunch key) renders as "off" — no deduction is
+  // exactly what's already happening, and a tap normalizes the entry to the
+  // explicit 30-minute default.
+  if (PayMath.isValidPair(entry.start, entry.end)) {
+    const on = !!entry.lunch;
+    const chip = document.createElement('button');
+    chip.type = 'button';
+    chip.className = 'lunch-chip ' + (on ? 'lunch-chip-on' : 'lunch-chip-off');
+    chip.textContent = on ? 'Lunch 30 min' : 'No lunch';
+    chip.setAttribute('aria-pressed', String(on));
+    chip.addEventListener('click', () => {
+      entry.lunch = on ? 0 : 30;
+      commitDay(worker, date);
+      renderWeek();
+    });
+    row.appendChild(chip);
   }
 
   return row;

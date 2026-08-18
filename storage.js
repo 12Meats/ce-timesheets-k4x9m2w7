@@ -36,6 +36,7 @@
           if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return null;
           if (!e || typeof e !== 'object' || Array.isArray(e)) return null;
           if (!isMinutes(e.start) || !isMinutes(e.end) || e.end <= e.start) return null;
+          if (e.lunch !== undefined && !(Number.isInteger(e.lunch) && e.lunch >= 0 && e.lunch <= 240)) return null;
         }
       }
       return d;
@@ -63,7 +64,7 @@
     let total = 0;
     for (const date of weekDates(mondayIso)) {
       const e = days[date];
-      if (e && e.end > e.start) total += e.end - e.start;
+      if (e && e.end > e.start) total += Math.max(0, (e.end - e.start) - (e.lunch || 0));
     }
     return total;
   }

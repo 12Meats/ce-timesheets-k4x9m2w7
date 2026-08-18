@@ -27,6 +27,14 @@
     return end - start;
   }
 
+  // Paid minutes for one day: worked minutes minus unpaid lunch, floored at 0.
+  // lunch may be undefined on legacy entries -> treated as 0.
+  function paidMinutes(start, end, lunch) {
+    const w = workedMinutes(start, end);
+    if (w === null) return null;
+    return Math.max(0, w - (lunch || 0));
+  }
+
   // Same hour-extraction as parseTimeDigits (length<=2 -> whole digits, else
   // slice(0,-2)). Paper sheets say "6:30" meaning AM and "3:00" meaning PM,
   // so hours 5-11 guess AM and hours 12 and 1-4 guess PM. Hours outside
@@ -74,5 +82,5 @@
     return h + ':' + String(m).padStart(2, '0') + ' ' + mer;
   }
 
-  return { parseTimeDigits, workedMinutes, toDecimal, splitOvertime, grossEstimate, formatTime, guessMeridiem, isValidPair };
+  return { parseTimeDigits, workedMinutes, paidMinutes, toDecimal, splitOvertime, grossEstimate, formatTime, guessMeridiem, isValidPair };
 });

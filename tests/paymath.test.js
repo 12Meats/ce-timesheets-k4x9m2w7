@@ -74,6 +74,13 @@ test('guessMeridiem: paper-sheet defaults', () => {
   assert.strictEqual(P.guessMeridiem(''), null);
   assert.strictEqual(P.guessMeridiem('1400'), null);  // 24h territory, no guess
 });
+test('paidMinutes: deducts lunch, floors at 0, legacy undefined = 0', () => {
+  assert.strictEqual(P.paidMinutes(390, 908, 30), 488);
+  assert.strictEqual(P.paidMinutes(390, 908, 0), 518);
+  assert.strictEqual(P.paidMinutes(390, 908, undefined), 518);
+  assert.strictEqual(P.paidMinutes(390, 410, 30), 0);      // 20min shift, floor at 0
+  assert.strictEqual(P.paidMinutes(900, 390, 30), null);   // invalid pair stays null
+});
 test('isValidPair: contract predicate', () => {
   assert.strictEqual(P.isValidPair(390, 900), true);
   assert.strictEqual(P.isValidPair(900, 390), false);

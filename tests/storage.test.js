@@ -58,6 +58,27 @@ test('validateImport accepts null/missing rate and usualStart', () => {
   assert.notStrictEqual(S.validateImport('{"version":1,"pin":"1234","workers":[{"id":"a","name":"A","rate":null,"usualStart":null}],"entries":{}}'), null);
   assert.notStrictEqual(S.validateImport('{"version":1,"pin":null,"workers":[{"id":"a","name":"A"}],"entries":{}}'), null);
 });
+test('weekMinutes deducts lunch per day', () => {
+  const d = S.emptyData();
+  d.workers.push({ id: 'x1', name: 'T', rate: null, usualStart: null });
+  d.entries['x1'] = {
+    '2026-08-10': { start: 390, end: 908, lunch: 30 },  // 488 paid
+    '2026-08-11': { start: 390, end: 908, lunch: 0 },   // 518 paid
+    '2026-08-12': { start: 390, end: 908 },             // legacy, 518 paid
+  };
+  assert.strictEqual(S.weekMinutes(d, 'x1', '2026-08-10'), 1524);
+});
+test('validateImport: lunch must be integer 0-240 when present', () => {
+  const base = (lunch) => JSON.stringify({ version: 1, pin: null,
+    workers: [{ id: 'a', name: 'A' }],
+    entries: { a: { '2026-08-10': Object.assign({ start: 390, end: 900 }, lunch) } } });
+  assert.notStrictEqual(S.validateImport(base({ lunch: 30 })), null);
+  assert.notStrictEqual(S.validateImport(base({})), null);            // missing ok
+  assert.strictEqual(S.validateImport(base({ lunch: -10 })), null);
+  assert.strictEqual(S.validateImport(base({ lunch: 500 })), null);
+  assert.strictEqual(S.validateImport(base({ lunch: 30.5 })), null);
+  assert.strictEqual(S.validateImport(base({ lunch: '30' })), null);
+});
 test('mondayOf is stable across DST-transition weeks', () => {
   assert.strictEqual(S.mondayOf('2026-03-08'), '2026-03-02'); // US spring-forward Sunday
   assert.strictEqual(S.mondayOf('2026-11-01'), '2026-10-26'); // US fall-back Sunday
