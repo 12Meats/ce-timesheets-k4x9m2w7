@@ -1469,3 +1469,7 @@ document.addEventListener('DOMContentLoaded', () => {
   });
   document.getElementById('deleteWorkerBtn').addEventListener('click', deleteCurrentWorker);
 });
+
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('sw.js').catch(() => {});
+}
