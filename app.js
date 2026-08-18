@@ -168,6 +168,12 @@ function handleBackspace() {
 // Task 6: promptTime — reusable full-screen keypad time-entry panel
 // ---------------------------------------------------------------------------
 
+// Guards against a second panel opening on top of the first from a fast
+// double-tap. WebKit's hit-test/click timing on iOS Safari can let a second
+// tap land before the first panel's overlay has fully blocked the tap
+// target, so this checks a flag rather than relying on that timing.
+let timePanelOpen = false;
+
 // opts: { title, current, allowClear = true, onDone }.
 // current is minutes-since-midnight or null. onDone(minutes) fires on Done
 // with the parsed minutes, or on Clear with null (only when allowClear);
@@ -175,6 +181,9 @@ function handleBackspace() {
 // buffer even when `current` is set — retyping is faster than editing — but
 // shows the old value as "was 6:30 AM" so the prior entry isn't a mystery.
 function promptTime(opts) {
+  if (timePanelOpen) return;
+  timePanelOpen = true;
+
   const onDone = opts.onDone;
   const current = opts.current;
   const allowClear = opts.allowClear !== false;
@@ -282,24 +291,14 @@ function promptTime(opts) {
   overlay.appendChild(actions);
   document.body.appendChild(overlay);
 
-  // Hour derived the same way PayMath.parseTimeDigits derives it, used only
-  // to pick a smart default meridiem while digits are still coming in.
-  function typedHour() {
-    if (digits === '') return null;
-    return digits.length <= 2 ? parseInt(digits, 10) : parseInt(digits.slice(0, -2), 10);
-  }
-
   // Paper sheets say "6:30" meaning AM and "3:00" meaning PM — hours 5-11
   // preselect AM, hours 12 and 1-4 preselect PM, so dad doesn't have to tap
   // AM/PM for the obvious cases. Recomputed on every digit change unless the
-  // user has explicitly tapped AM/PM (meridiemLocked).
+  // user has explicitly tapped AM/PM (meridiemLocked). Pure hour-guessing
+  // logic lives in PayMath.guessMeridiem so it's testable outside the DOM.
   function recomputeMeridiem() {
     if (meridiemLocked) return;
-    const h = typedHour();
-    if (h === null) { meridiem = null; return; }
-    if (h >= 5 && h <= 11) meridiem = 'AM';
-    else if (h === 12 || (h >= 1 && h <= 4)) meridiem = 'PM';
-    else meridiem = null;
+    meridiem = PayMath.guessMeridiem(digits);
   }
 
   // If digits form a valid 24h time (e.g. "1400") and no meridiem is
@@ -326,6 +325,7 @@ function promptTime(opts) {
 
   function close() {
     overlay.remove();
+    timePanelOpen = false;
   }
 
   doneBtn.addEventListener('click', () => {
@@ -713,14 +713,20 @@ function buildWeekDraft(worker, mondayIso) {
 // STORAGE CONTRACT: only complete valid pairs (both set, end > start) are
 // ever written; anything else (missing side, or end <= start) means the
 // date key is deleted entirely — absent = no work, never a half/wrong entry.
+// The validity predicate itself lives in PayMath.isValidPair so both the UI
+// and any future non-UI code (e.g. an import/export path) share one rule.
 function commitDay(worker, date) {
   const entry = weekDraft[date];
-  const valid = entry.start != null && entry.end != null && entry.end > entry.start;
+  const valid = PayMath.isValidPair(entry.start, entry.end);
+  const stored = state.data.entries[worker.id];
+  const hadEntry = !!(stored && date in stored);
+  if (!valid && !hadEntry) return; // nothing to persist and nothing to remove
+
   if (valid) {
-    if (!state.data.entries[worker.id]) state.data.entries[worker.id] = {};
+    if (!stored) state.data.entries[worker.id] = {};
     state.data.entries[worker.id][date] = { start: entry.start, end: entry.end };
-  } else if (state.data.entries[worker.id]) {
-    delete state.data.entries[worker.id][date];
+  } else {
+    delete stored[date];
   }
   Store.save(state.data);
 }
@@ -740,6 +746,12 @@ function renderWeek() {
 
   const mondayIso = state.currentMonday;
   const key = worker.id + '|' + mondayIso;
+  // Asymmetric on purpose: the draft survives re-renders for the SAME
+  // worker+week (e.g. navigating to screen-worker and back via history, or
+  // promptTime committing a day) so in-progress/invalid entries aren't lost,
+  // but it resets the moment the key changes (paging weeks with </>, or a
+  // different worker) since there's nothing worth carrying over. Either way
+  // it's memory-only — never persisted, never read back after a reload.
   if (key !== weekDraftKey) {
     weekDraft = buildWeekDraft(worker, mondayIso);
     weekDraftKey = key;
@@ -906,7 +918,9 @@ document.addEventListener('DOMContentLoaded', () => {
   initPinScreen();
   navigateTo('screen-pin');
 
-  document.querySelector('.keypad').addEventListener('click', (e) => {
+  // Scoped to the static PIN keypad by id — promptTime()'s panel builds its
+  // own dynamic .keypad per-open, and the two must never be confused.
+  document.getElementById('pinKeypad').addEventListener('click', (e) => {
     const btn = e.target.closest('button');
     if (!btn || btn.disabled) return;
     if (btn.id === 'backspaceBtn') {

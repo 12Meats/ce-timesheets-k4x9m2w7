@@ -27,6 +27,27 @@
     return end - start;
   }
 
+  // Same hour-extraction as parseTimeDigits (length<=2 -> whole digits, else
+  // slice(0,-2)). Paper sheets say "6:30" meaning AM and "3:00" meaning PM,
+  // so hours 5-11 guess AM and hours 12 and 1-4 guess PM. Hours outside
+  // 1-12 (13-23, or unparseable/empty digits) are 24h territory or nonsense
+  // — no guess, caller keeps neither AM nor PM selected.
+  function guessMeridiem(digits) {
+    if (!/^\d{1,4}$/.test(digits)) return null;
+    const h = digits.length <= 2 ? parseInt(digits, 10) : parseInt(digits.slice(0, -2), 10);
+    if (h >= 5 && h <= 11) return 'AM';
+    if (h === 12 || (h >= 1 && h <= 4)) return 'PM';
+    return null;
+  }
+
+  // The one predicate the storage contract hinges on: a pair may be written
+  // to entries only when both sides are set, in-range minutes-since-midnight
+  // and end is strictly after start.
+  function isValidPair(start, end) {
+    const isMinutes = (v) => Number.isInteger(v) && v >= 0 && v <= 1439;
+    return isMinutes(start) && isMinutes(end) && end > start;
+  }
+
   function toDecimal(minutes) { return Math.round((minutes / 60) * 100) / 100; }
 
   function splitOvertime(totalMinutes) {
@@ -53,5 +74,5 @@
     return h + ':' + String(m).padStart(2, '0') + ' ' + mer;
   }
 
-  return { parseTimeDigits, workedMinutes, toDecimal, splitOvertime, grossEstimate, formatTime };
+  return { parseTimeDigits, workedMinutes, toDecimal, splitOvertime, grossEstimate, formatTime, guessMeridiem, isValidPair };
 });

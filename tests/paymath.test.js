@@ -65,3 +65,20 @@ test('grossEstimate: integer-cents math avoids 1-cent float errors', () => {
   assert.strictEqual(P.grossEstimate(999, 0, 18.5), 308.03);   // 16.65h x 18.50
   assert.strictEqual(P.grossEstimate(1310, 0, 18.5), 403.86);  // 21.83h x 18.50
 });
+test('guessMeridiem: paper-sheet defaults', () => {
+  assert.strictEqual(P.guessMeridiem('630'), 'AM');   // 6 -> AM
+  assert.strictEqual(P.guessMeridiem('11'), 'AM');
+  assert.strictEqual(P.guessMeridiem('308'), 'PM');   // 3 -> PM
+  assert.strictEqual(P.guessMeridiem('12'), 'PM');    // noon
+  assert.strictEqual(P.guessMeridiem('1'), 'PM');
+  assert.strictEqual(P.guessMeridiem(''), null);
+  assert.strictEqual(P.guessMeridiem('1400'), null);  // 24h territory, no guess
+});
+test('isValidPair: contract predicate', () => {
+  assert.strictEqual(P.isValidPair(390, 900), true);
+  assert.strictEqual(P.isValidPair(900, 390), false);
+  assert.strictEqual(P.isValidPair(390, 390), false);
+  assert.strictEqual(P.isValidPair(null, 900), false);
+  assert.strictEqual(P.isValidPair(0, 1439), true);
+  assert.strictEqual(P.isValidPair(390, 1440), false);
+});
