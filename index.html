@@ -24,6 +24,7 @@
       --color-warn-bg: #fef3c7;
       --color-warn-border: #f59e0b;
       --color-warn-text: #92400e;
+      --color-chart-guide: #94a3b8;
       --font: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
       --space-1: 8px;
       --space-2: 12px;
@@ -443,13 +444,13 @@
       white-space: nowrap;
     }
     .hours-chart-bar { width: 70%; max-width: 26px; background: var(--color-accent); border-radius: 3px 3px 0 0; }
-    .hours-chart-bar-zero { background: #cbd5e1; }
-    .hours-chart-40line { position: absolute; left: 0; right: 0; border-top: 1px dashed #94a3b8; pointer-events: none; }
+    .hours-chart-bar-zero { background: var(--color-border); }
+    .hours-chart-40line { position: absolute; left: 0; right: 0; border-top: 1px dashed var(--color-chart-guide); pointer-events: none; }
     .hours-chart-40label {
       position: absolute;
       left: 2px;
       font-size: 0.65rem;
-      color: #94a3b8;
+      color: var(--color-chart-guide);
       background: var(--color-surface);
       padding: 0 2px;
       line-height: 1;
