@@ -215,6 +215,146 @@
     .btn-primary { background: var(--color-accent); border-color: var(--color-accent); color: #fff; }
     .btn-confirm { background: var(--color-confirm); border-color: var(--color-confirm); color: #fff; }
     .btn-danger { background: var(--color-danger); border-color: var(--color-danger); color: #fff; }
+
+    .btn-block { display: block; width: 100%; text-align: center; }
+
+    input[type="text"] {
+      min-height: 48px;
+      font-size: var(--font-body);
+      font-family: inherit;
+      border-radius: 10px;
+      border: 1px solid var(--color-border);
+      background: var(--color-surface);
+      color: var(--color-text);
+      padding: 0 var(--space-2);
+      width: 100%;
+    }
+    input[type="text"]:focus { outline: 2px solid var(--color-accent); outline-offset: 1px; }
+    input.field-invalid { border-color: var(--color-danger); outline-color: var(--color-danger); }
+
+    /* ---------- Cards (worker list) ---------- */
+    .worker-card {
+      display: block;
+      width: 100%;
+      text-align: left;
+      background: var(--color-surface);
+      border: 1px solid var(--color-border);
+      border-radius: 12px;
+      padding: var(--space-3);
+      margin-bottom: var(--space-2);
+      box-shadow: 0 1px 2px rgba(15, 23, 42, 0.06);
+    }
+    .worker-card:active { background: #eef2f7; }
+    .worker-card-name { font-size: var(--font-lg); font-weight: 700; color: var(--color-text); }
+    .worker-card-hours { margin-top: 4px; font-size: var(--font-body); color: var(--color-text-muted); }
+
+    .empty-state {
+      font-size: var(--font-body);
+      color: var(--color-text-muted);
+      padding: var(--space-4) 0;
+      text-align: center;
+    }
+
+    .section-heading {
+      font-size: var(--font-lg);
+      font-weight: 700;
+      margin: var(--space-4) 0 var(--space-2);
+    }
+    .section-heading:first-child { margin-top: 0; }
+
+    .add-worker-form {
+      display: flex;
+      flex-direction: column;
+      gap: var(--space-2);
+      background: var(--color-surface);
+      border: 1px solid var(--color-border);
+      border-radius: 12px;
+      padding: var(--space-3);
+      margin-bottom: var(--space-3);
+    }
+    .add-worker-actions { display: flex; gap: var(--space-2); }
+    .add-worker-actions .btn { flex: 1; }
+
+    .settings-link {
+      display: block;
+      margin: var(--space-3) auto 0;
+      background: transparent;
+      border: none;
+      color: var(--color-text-muted);
+      font-size: 0.95rem;
+      min-height: 48px;
+      text-align: center;
+      width: 100%;
+    }
+
+    /* ---------- Worker file ---------- */
+    .field-row {
+      background: var(--color-surface);
+      border: 1px solid var(--color-border);
+      border-radius: 12px;
+      padding: var(--space-3);
+      margin-bottom: var(--space-2);
+    }
+    .field-label {
+      font-size: 0.95rem;
+      font-weight: 600;
+      color: var(--color-text-muted);
+      margin-bottom: 6px;
+      display: block;
+    }
+    .rate-input-wrap {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .rate-prefix { font-size: var(--font-lg); font-weight: 600; color: var(--color-text); }
+
+    .start-time-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: var(--space-2);
+    }
+    .start-time-value { font-size: var(--font-lg); font-weight: 600; }
+
+    .start-time-edit {
+      margin-top: var(--space-2);
+      display: flex;
+      flex-direction: column;
+      gap: var(--space-2);
+    }
+    .meridiem-toggle { display: flex; gap: var(--space-2); }
+    .meridiem-btn {
+      flex: 1;
+      min-height: 48px;
+      border-radius: 10px;
+      border: 1px solid var(--color-border);
+      background: var(--color-surface);
+      color: var(--color-text);
+      font-weight: 600;
+    }
+    .meridiem-btn.selected { background: var(--color-accent); border-color: var(--color-accent); color: #fff; }
+    .start-time-actions { display: flex; gap: var(--space-2); }
+    .start-time-actions .btn { flex: 1; }
+    .field-hint { color: var(--color-danger); font-size: 0.9rem; margin-top: 6px; display: none; }
+    .field-hint.show { display: block; }
+
+    .history-row {
+      display: block;
+      width: 100%;
+      text-align: left;
+      background: var(--color-surface);
+      border: 1px solid var(--color-border);
+      border-radius: 12px;
+      padding: var(--space-3);
+      margin-bottom: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .history-row:active { background: #eef2f7; }
+    .history-week { font-size: var(--font-body); font-weight: 600; }
+    .history-hours { font-size: var(--font-body); color: var(--color-text-muted); }
   </style>
 </head>
 <body>
@@ -252,16 +392,23 @@
     </section>
 
     <section id="screen-workers" class="screen" hidden>
-      <div class="screen-content screen-placeholder">
-        <h2>Workers</h2>
-        <p>Worker list goes here (Task 5).</p>
+      <div class="screen-content">
+        <div id="workersList"></div>
+        <div id="addWorkerArea"></div>
+        <button type="button" id="addWorkerBtn" class="btn btn-primary btn-block">+ Add worker</button>
+        <button type="button" id="paydaySummaryBtn" class="btn btn-block" style="margin-top: var(--space-2);">Payday summary</button>
+        <button type="button" id="settingsBtn" class="settings-link">Settings</button>
       </div>
     </section>
 
     <section id="screen-worker" class="screen" hidden>
-      <div class="screen-content screen-placeholder">
-        <h2>Worker</h2>
-        <p>Worker detail goes here (Task 6).</p>
+      <div class="screen-content">
+        <div id="workerFields"></div>
+        <button type="button" id="enterHoursBtn" class="btn btn-primary btn-block">Enter hours</button>
+        <h3 class="section-heading">Week history</h3>
+        <div id="workerHistory"></div>
+        <div id="worker-extras"></div>
+        <button type="button" id="deleteWorkerBtn" class="btn btn-danger btn-block" style="margin-top: var(--space-4);">Delete worker</button>
       </div>
     </section>
 
