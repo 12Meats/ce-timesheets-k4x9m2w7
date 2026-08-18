@@ -29,6 +29,13 @@ function show(screenId) {
   });
   currentScreen = screenId;
 
+  // Screens toggle via [hidden] rather than a real navigation, so the
+  // document scroll position from whatever screen was showing before
+  // carries over otherwise — e.g. scrolling down a long worker history then
+  // tapping "Enter hours" would land on the week screen already scrolled
+  // past its own header. Every screen should start at the top.
+  window.scrollTo(0, 0);
+
   const topbar = document.getElementById('topbar');
   const backBtn = document.getElementById('backBtn');
   const titleEl = document.getElementById('topbarTitle');
