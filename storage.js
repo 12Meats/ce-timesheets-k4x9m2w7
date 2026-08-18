@@ -104,14 +104,24 @@
   // refIso where this worker has NO entry but at least one OTHER worker has
   // an entry that day. Days after refIso (future) are excluded. Returns
   // [date, ...] ascending.
+  //
+  // Floored at the worker's own earliest recorded entry: a day before the
+  // worker's first recorded entry is unknowable (new hire, or the app was
+  // adopted mid-employment), not missed. A worker with no entries at all has
+  // no floor to compute from, so nothing can ever be flagged for them.
   function missedDays(data, workerId, refIso, weeksBack) {
     const own = data.entries[workerId] || {};
+    const ownDates = Object.keys(own);
+    if (ownDates.length === 0) return [];
+    const firstDate = ownDates.reduce((min, d) => (d < min ? d : min));
+
     const out = [];
     weeksBackList(refIso, weeksBack).forEach((monday) => {
       const dates = weekDates(monday);
       for (let i = 0; i < 5; i++) {
         const date = dates[i];
         if (date > refIso) continue;
+        if (date < firstDate) continue;
         if (own[date]) continue;
         const othersWorked = Object.keys(data.entries).some(
           (id) => id !== workerId && data.entries[id] && data.entries[id][date]

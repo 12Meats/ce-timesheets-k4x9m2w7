@@ -107,3 +107,16 @@ test('missedDays: weekday gaps only when others worked, no future days', () => {
   // Wed 8/12: nobody worked -> not missed. Thu 8/13 is refIso day: a has no entry, b has none -> not missed. Fri future -> excluded.
   assert.deepStrictEqual(S.missedDays(d, 'b', '2026-08-13', 1), []);
 });
+test('missedDays: never flags days before the worker\'s first entry, or workers with none', () => {
+  const d = S.emptyData();
+  d.workers.push({ id: 'a', name: 'A', rate: null, usualStart: null },
+                 { id: 'n', name: 'New', rate: null, usualStart: null });
+  d.entries['a'] = { '2026-08-03': { start: 390, end: 900, lunch: 30 },   // prior Mon
+                     '2026-08-10': { start: 390, end: 900, lunch: 30 } };
+  d.entries['n'] = { '2026-08-12': { start: 390, end: 900, lunch: 30 } }; // first entry Wed
+  // 'n' not flagged for Mon 8/10 or Tue 8/11 (before first entry), and 8/13 has no other workers' entries
+  assert.deepStrictEqual(S.missedDays(d, 'n', '2026-08-14', 2), []);
+  // worker with zero entries -> [] even though others worked
+  d.workers.push({ id: 'z', name: 'Zero', rate: null, usualStart: null });
+  assert.deepStrictEqual(S.missedDays(d, 'z', '2026-08-14', 2), []);
+});
