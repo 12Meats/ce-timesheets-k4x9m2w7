@@ -7,6 +7,7 @@
   // digits: what the user typed ("630", "3", "1400"); meridiem: "AM" | "PM" | null (null = 24h entry)
   function parseTimeDigits(digits, meridiem) {
     if (!/^\d{1,4}$/.test(digits)) return null;
+    if (meridiem !== 'AM' && meridiem !== 'PM' && meridiem !== null) return null;
     let h, m;
     if (digits.length <= 2) { h = parseInt(digits, 10); m = 0; }
     else { h = parseInt(digits.slice(0, -2), 10); m = parseInt(digits.slice(-2), 10); }
@@ -33,6 +34,9 @@
     return { regMin, otMin: totalMinutes - regMin };
   }
 
+  // Deliberately multiplies the ROUNDED decimal hours (not exact minutes) by the
+  // rate: the user keys those rounded decimals into ADP, and ADP pays from them.
+  // The estimate must match ADP's arithmetic, so it mirrors that rounding order.
   function grossEstimate(regMin, otMin, rate) {
     if (rate == null) return null;
     return Math.round((toDecimal(regMin) * rate + toDecimal(otMin) * rate * 1.5) * 100) / 100;

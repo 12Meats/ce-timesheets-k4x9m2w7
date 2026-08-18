@@ -44,3 +44,19 @@ test('formatTime: 390 = "6:30 AM", 0 = "12:00 AM", 750 = "12:30 PM"', () => {
   assert.strictEqual(P.formatTime(0), '12:00 AM');
   assert.strictEqual(P.formatTime(750), '12:30 PM');
 });
+test('grossEstimate mirrors ADP: rounded decimal hours x rate (ugly minutes)', () => {
+  // 518 min -> 8.63 decimal hours keyed into ADP; ADP pays 8.63 * 18.50 = 159.655 -> 159.66
+  assert.strictEqual(P.grossEstimate(518, 0, 18.5), 159.66);
+  // 7 min -> 0.12 h; 0.12 * 10 = 1.20 (matches ADP, NOT exact-minutes 1.17)
+  assert.strictEqual(P.grossEstimate(7, 0, 10), 1.2);
+});
+test('splitOvertime: exactly 40h -> all regular, zero OT', () => {
+  assert.deepStrictEqual(P.splitOvertime(2400), { regMin: 2400, otMin: 0 });
+});
+test('formatTime: noon = "12:00 PM"', () => {
+  assert.strictEqual(P.formatTime(720), '12:00 PM');
+});
+test('parseTimeDigits: bad meridiem values -> null', () => {
+  assert.strictEqual(P.parseTimeDigits('630', 'am'), null);
+  assert.strictEqual(P.parseTimeDigits('630', undefined), null);
+});

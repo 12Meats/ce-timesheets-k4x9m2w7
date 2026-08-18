@@ -1,0 +1,5 @@
+{
+  "name": "ce-timesheets",
+  "private": true,
+  "scripts": { "test": "node --test tests/*.test.js" }
+}
