@@ -727,9 +727,14 @@ function buildWeekDraft(worker, mondayIso) {
 // lunch is written straight from the draft: for a brand-new complete entry
 // the draft was preloaded with 30 (see buildWeekDraft), and for an existing
 // entry whose times are being edited the draft's lunch was copied unchanged
-// from storage — so no special-casing is needed here for "new vs update".
-// The lunch chip's own handler flips entry.lunch before calling this, so
-// that path writes the toggled value the same way.
+// from storage, so it's preserved across the edit. The lunch chip's own
+// handler flips entry.lunch before calling this, so that path writes the
+// toggled value the same way. The one case that DOES need special-casing:
+// when a day is deleted (its pair became invalid, e.g. a cleared end time),
+// the draft's lunch is reset back to the 30-min default. Without that reset,
+// a deleted-then-recompleted day would silently inherit whatever lunch value
+// was sitting in the draft (possibly 0, from a toggle before the delete)
+// instead of being treated as the brand-new entry it now is.
 function commitDay(worker, date) {
   const entry = weekDraft[date];
   const valid = PayMath.isValidPair(entry.start, entry.end);
@@ -742,6 +747,7 @@ function commitDay(worker, date) {
     state.data.entries[worker.id][date] = { start: entry.start, end: entry.end, lunch: entry.lunch };
   } else {
     delete stored[date];
+    entry.lunch = 30; // deleted day resets to the default for its next commit
   }
   Store.save(state.data);
 }
