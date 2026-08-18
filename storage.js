@@ -76,7 +76,13 @@
     } catch { return emptyData(); }
   }
   function save(data) {
-    if (typeof localStorage !== 'undefined') localStorage.setItem(KEY, JSON.stringify(data));
+    if (typeof localStorage === 'undefined') return;
+    try {
+      localStorage.setItem(KEY, JSON.stringify(data));
+    } catch {
+      // localStorage full or unavailable (e.g. private browsing) — swallow so
+      // the app keeps running on its in-memory state instead of crashing.
+    }
   }
 
   return { emptyData, validateImport, mondayOf, weekDates, weekMinutes, load, save, KEY };

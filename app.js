@@ -3,27 +3,26 @@
 
 const state = { data: null, currentWorkerId: null, currentMonday: null };
 
-const SCREEN_IDS = ['screen-pin', 'screen-workers', 'screen-worker', 'screen-week', 'screen-payday'];
-
-const SCREEN_TITLES = {
-  'screen-workers': 'Workers',
-  'screen-worker': 'Worker',
-  'screen-week': 'Week',
-  'screen-payday': 'Payday',
-};
-
-// Where the back button sends you from each screen. Screens not listed here
-// (screen-workers, screen-pin) never show a back button.
-const BACK_TARGETS = {
-  'screen-worker': 'screen-workers',
-  'screen-week': 'screen-worker',
-  'screen-payday': 'screen-workers',
+// Single source of truth for every screen: its top-bar title, where its back
+// button goes (null = no back button), and the render function to call after
+// navigating there (null = nothing to render, e.g. static/PIN screens).
+// Later tasks: register your screen's render fn in SCREENS and always
+// navigate via navigateTo() so destinations always re-render.
+const SCREENS = {
+  'screen-pin':     { title: '',        back: null,             render: null },
+  'screen-workers': { title: 'Workers', back: null,             render: () => renderWorkers() },
+  'screen-worker':  { title: 'Worker',  back: 'screen-workers', render: null }, // Task 5/6 sets render
+  'screen-week':    { title: 'Week',    back: 'screen-worker',  render: null }, // Task 7 sets render; back may be set dynamically later
+  'screen-payday':  { title: 'Payday',  back: 'screen-workers', render: null }, // Task 8 sets render
 };
 
 let currentScreen = null;
 
+// Pure visibility/top-bar work — toggles which section is shown and updates
+// the top bar's title/back button from SCREENS. Does not render content;
+// use navigateTo() for that.
 function show(screenId) {
-  SCREEN_IDS.forEach((id) => {
+  Object.keys(SCREENS).forEach((id) => {
     const el = document.getElementById(id);
     if (el) el.hidden = id !== screenId;
   });
@@ -39,9 +38,19 @@ function show(screenId) {
   }
 
   topbar.hidden = false;
-  titleEl.textContent = SCREEN_TITLES[screenId] || '';
-  const backTarget = BACK_TARGETS[screenId];
-  backBtn.hidden = !backTarget;
+  const config = SCREENS[screenId] || {};
+  titleEl.textContent = config.title || '';
+  backBtn.hidden = !config.back;
+}
+
+// Navigate to a screen and run its render function, if any. Every navigation
+// in the app (back button, proceeding past the PIN screen, and all
+// screen-to-screen jumps in later tasks) should go through this rather than
+// calling show() directly, so the destination's content is always fresh.
+function navigateTo(screenId) {
+  show(screenId);
+  const render = SCREENS[screenId] && SCREENS[screenId].render;
+  if (render) render();
 }
 
 // ---------------------------------------------------------------------------
@@ -72,9 +81,13 @@ function shakeDots() {
   dotsEl.classList.remove('shake');
   void dotsEl.offsetWidth; // force reflow so the animation restarts if triggered twice in a row
   dotsEl.classList.add('shake');
+  // Belt-and-braces: also drop the class as soon as the animation finishes,
+  // in case resetPinEntry() doesn't run first (e.g. future callers of shakeDots()).
+  dotsEl.addEventListener('animationend', () => dotsEl.classList.remove('shake'), { once: true });
 }
 
 function resetPinEntry(mode) {
+  pinDotsEl().classList.remove('shake'); // dots must return to their normal color on the next entry
   pinBuffer = [];
   updateDots();
   pinMode = mode;
@@ -90,8 +103,7 @@ function initPinScreen() {
 }
 
 function proceedFromPin() {
-  show('screen-workers');
-  renderWorkers();
+  navigateTo('screen-workers');
 }
 
 function handlePinComplete() {
@@ -134,7 +146,7 @@ function handlePinComplete() {
     setPinMessage('Wrong PIN — try again');
     setTimeout(() => {
       pinBusy = false;
-      setPinMessage('Enter PIN');
+      resetPinEntry('enter'); // also clears the shake class, independent of animationend
     }, 1200);
   }
 }
@@ -156,6 +168,8 @@ function handleBackspace() {
 // Screen stubs for later tasks
 // ---------------------------------------------------------------------------
 
+// RULE for all render fns: build DOM via createElement/textContent. NEVER
+// innerHTML with interpolated user data (worker names are free text).
 function renderWorkers() {
   // Task 5 fills this in: render the worker list on screen-workers.
 }
@@ -167,7 +181,7 @@ function renderWorkers() {
 document.addEventListener('DOMContentLoaded', () => {
   state.data = Store.load();
   initPinScreen();
-  show('screen-pin');
+  navigateTo('screen-pin');
 
   document.querySelector('.keypad').addEventListener('click', (e) => {
     const btn = e.target.closest('button');
@@ -180,7 +194,7 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   document.getElementById('backBtn').addEventListener('click', () => {
-    const target = BACK_TARGETS[currentScreen];
-    if (target) show(target);
+    const config = SCREENS[currentScreen];
+    if (config && config.back) navigateTo(config.back);
   });
 });
