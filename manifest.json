@@ -4,6 +4,6 @@
   "display": "standalone",
   "start_url": "./",
   "background_color": "#f8fafc",
-  "theme_color": "#1d4ed8",
+  "theme_color": "#1e40af",
   "icons": [{ "src": "icon.png", "sizes": "512x512", "type": "image/png" }]
 }

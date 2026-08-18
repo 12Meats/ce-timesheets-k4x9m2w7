@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
   <title>CE Timesheets</title>
-  <meta name="theme-color" content="#1d4ed8">
+  <meta name="theme-color" content="#1e40af">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="default">
   <meta name="apple-mobile-web-app-title" content="CE Timesheets">
@@ -12,7 +12,7 @@
   <link rel="apple-touch-icon" href="apple-touch-icon.png">
   <style>
     :root {
-      --color-accent: #1d4ed8;
+      --color-accent: #1e40af;
       --color-accent-dark: #1e3a8a;
       --color-confirm: #15803d;
       --color-danger: #b91c1c;
@@ -221,6 +221,10 @@
     .btn-primary { background: var(--color-accent); border-color: var(--color-accent); color: #fff; }
     .btn-confirm { background: var(--color-confirm); border-color: var(--color-confirm); color: #fff; }
     .btn-danger { background: var(--color-danger); border-color: var(--color-danger); color: #fff; }
+    /* Danger-flavored but outline-only — deliberately less visually loud than
+       the solid .btn-danger, since this is a Settings entry point, not the
+       destructive action itself (that's the confirm() dialog behind it). */
+    .btn-danger-outline { background: transparent; border-color: var(--color-danger); color: var(--color-danger); }
 
     .btn-block { display: block; width: 100%; text-align: center; }
 
@@ -522,25 +526,42 @@
       margin-top: 8px;
     }
 
+    /* Row holding the lunch chip (left) and the small paid-time sub-display
+       (right) beneath a complete day — v2: was just the lunch chip alone. */
+    .week-day-bottom {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: var(--space-2);
+      margin-top: 8px;
+    }
+
+    /* v2: deliberately smaller/quieter than a primary button — reads as a
+       status chip, not something that invites an accidental tap. */
     .lunch-chip {
       display: inline-flex;
       align-items: center;
-      min-height: 48px;
-      margin-top: 8px;
-      padding: 0 16px;
+      min-height: 40px;
+      padding: 0 12px;
       border-radius: 999px;
-      font-size: 0.95rem;
+      font-size: 0.85rem;
       font-weight: 600;
     }
     .lunch-chip-on {
       border: 1.5px solid var(--color-accent);
-      background: rgba(29, 78, 216, 0.08);
+      background: rgba(30, 64, 175, 0.08);
       color: var(--color-accent);
     }
     .lunch-chip-off {
       border: 1.5px solid var(--color-border);
       background: var(--color-surface);
       color: var(--color-text-muted);
+    }
+
+    .week-day-duration {
+      font-size: 0.78rem;
+      color: var(--color-text-muted);
+      white-space: nowrap;
     }
 
     .week-footer {
@@ -586,22 +607,27 @@
       margin-top: 4px;
       font-size: 0.95rem;
     }
+    /* v2: raw typed digits are now the dominant element (see .time-panel-digits
+       below) — the converted-time preview is secondary, smaller and placed
+       underneath so mid-typing states (e.g. "21") don't flash a jarring
+       military-time interpretation front and center. */
     .time-panel-preview {
-      font-size: var(--font-xl);
-      font-weight: 800;
+      font-size: 1.3rem;
+      font-weight: 700;
       text-align: center;
       color: var(--color-accent);
-      margin: var(--space-4) 0 var(--space-2);
+      margin: 0 0 var(--space-4);
       min-height: 1.3em;
     }
     .time-panel-preview.shake { animation: shake 0.5s; color: var(--color-danger); }
     .time-panel-digits {
       text-align: center;
-      color: var(--color-text-muted);
-      font-size: 1.1rem;
-      min-height: 1.5em;
-      margin-bottom: var(--space-3);
-      letter-spacing: 0.05em;
+      color: var(--color-text);
+      font-size: 2.6rem;
+      font-weight: 800;
+      min-height: 1.3em;
+      margin: var(--space-4) 0 var(--space-2);
+      letter-spacing: 0.06em;
     }
     .time-panel-keypad {
       margin: 0 auto var(--space-3);
@@ -657,6 +683,58 @@
       font-size: 0.9rem;
       text-align: center;
     }
+    .settings-caption {
+      color: var(--color-text-muted);
+      font-size: 0.82rem;
+      margin-top: 6px;
+    }
+
+    /* ---------- Lunch length pills (Settings, v2) ---------- */
+    .lunch-pills {
+      display: flex;
+      flex-wrap: wrap;
+      gap: var(--space-2);
+    }
+    .lunch-pill {
+      min-height: 44px;
+      padding: 0 18px;
+      border-radius: 999px;
+      border: 1.5px solid var(--color-border);
+      background: var(--color-surface);
+      color: var(--color-text);
+      font-size: 0.95rem;
+      font-weight: 600;
+    }
+    .lunch-pill-active {
+      border-color: var(--color-accent);
+      background: var(--color-accent);
+      color: #fff;
+    }
+
+    /* ---------- Delete-a-worker list (Settings, v2) ---------- */
+    .delete-worker-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: var(--space-2);
+      background: var(--color-surface);
+      border: 1px solid var(--color-border);
+      border-radius: 12px;
+      padding: var(--space-2) var(--space-3);
+      margin-bottom: 8px;
+    }
+    .delete-worker-name { font-size: var(--font-body); font-weight: 600; }
+    .delete-worker-btn {
+      min-height: 40px;
+      padding: 0 14px;
+      border-radius: 10px;
+      border: 1px solid var(--color-danger);
+      background: transparent;
+      color: var(--color-danger);
+      font-size: 0.9rem;
+      font-weight: 600;
+    }
+    .delete-worker-btn:active { background: rgba(185, 28, 28, 0.1); }
   </style>
 </head>
 <body>
@@ -712,7 +790,6 @@
         <div id="workerHistory"></div>
         <!-- Task 8 fills this: late/missed flags + hours chart -->
         <div id="workerExtras"></div>
-        <button type="button" id="deleteWorkerBtn" class="btn btn-danger btn-block mt-3">Delete worker</button>
       </div>
     </section>
 
@@ -733,8 +810,16 @@
         <label for="importFileInput" id="importDataLabel" class="btn btn-block settings-file-label">Import Data</label>
         <input type="file" id="importFileInput" accept="application/json,.json" hidden>
 
+        <h3 class="section-heading">Lunch break length</h3>
+        <div id="lunchPillsArea" class="lunch-pills"></div>
+        <p class="settings-caption">Applies to newly entered days. Days already entered keep their lunch.</p>
+
         <h3 class="section-heading">PIN</h3>
         <button type="button" id="changePinBtn" class="btn btn-block">Change PIN</button>
+
+        <h3 class="section-heading">Workers</h3>
+        <button type="button" id="deleteWorkerToggleBtn" class="btn btn-block btn-danger-outline">Delete a worker&hellip;</button>
+        <div id="deleteWorkerArea" class="mt-3"></div>
 
         <p id="aboutText" class="settings-about mt-3">CE Timesheets v1</p>
       </div>

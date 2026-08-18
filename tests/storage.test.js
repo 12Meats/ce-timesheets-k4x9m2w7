@@ -79,6 +79,20 @@ test('validateImport: lunch must be integer 0-240 when present', () => {
   assert.strictEqual(S.validateImport(base({ lunch: 30.5 })), null);
   assert.strictEqual(S.validateImport(base({ lunch: '30' })), null);
 });
+test('lunchDefault: 30 when missing, honors stored value', () => {
+  assert.strictEqual(S.lunchDefault(S.emptyData()), 30);
+  const d = S.emptyData(); d.lunchMinutes = 60;
+  assert.strictEqual(S.lunchDefault(d), 60);
+});
+test('validateImport: lunchMinutes optional int 0-240', () => {
+  const base = (extra) => JSON.stringify(Object.assign({ version: 1, pin: null, workers: [], entries: {} }, extra));
+  assert.notStrictEqual(S.validateImport(base({})), null);
+  assert.notStrictEqual(S.validateImport(base({ lunchMinutes: 60 })), null);
+  assert.notStrictEqual(S.validateImport(base({ lunchMinutes: 0 })), null);
+  assert.strictEqual(S.validateImport(base({ lunchMinutes: 999 })), null);
+  assert.strictEqual(S.validateImport(base({ lunchMinutes: '30' })), null);
+  assert.strictEqual(S.validateImport(base({ lunchMinutes: 30.5 })), null);
+});
 test('mondayOf is stable across DST-transition weeks', () => {
   assert.strictEqual(S.mondayOf('2026-03-08'), '2026-03-02'); // US spring-forward Sunday
   assert.strictEqual(S.mondayOf('2026-11-01'), '2026-10-26'); // US fall-back Sunday

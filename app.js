@@ -292,8 +292,8 @@ function promptTime(opts) {
 
   overlay.appendChild(titleEl);
   overlay.appendChild(wasEl);
-  overlay.appendChild(previewEl);
   overlay.appendChild(digitsEl);
+  overlay.appendChild(previewEl);
   overlay.appendChild(keypad);
   overlay.appendChild(meridiemWrap);
   overlay.appendChild(actions);
@@ -309,11 +309,27 @@ function promptTime(opts) {
     meridiem = PayMath.guessMeridiem(digits);
   }
 
-  // If digits form a valid 24h time (e.g. "1400") and no meridiem is
-  // selected, parseTimeDigits(digits, null) reads it as 24h entry.
+  // Governs BOTH the live preview and the Done-button acceptance test, so
+  // there is exactly one "is this buffer showable/acceptable" rule in the
+  // whole panel. `meridiem` already IS the effective meridiem: it's either
+  // the explicitly-tapped AM/PM (meridiemLocked) or the auto-guess from
+  // recomputeMeridiem(), which is null for hours 13-23 (military territory)
+  // and 0 (nonsense alone).
+  //
+  // With a meridiem in play, any valid digit length parses normally (the
+  // 630 -> "6:30 AM" flow needs this from the very first digit).
+  //
+  // With NO meridiem, only a full 4-digit buffer is treated as a deliberate
+  // 24-hour entry (e.g. "1400" -> 2:00 PM) — a short 1-2 digit buffer that
+  // guessed no meridiem (like "21", hour 21) must NOT fall through to the
+  // null-meridiem 24h interpretation of parseTimeDigits, or every partial
+  // military-hour buffer would flash a jarring conversion mid-typing (the
+  // original bug: "21" showing "9:00 PM" before the minutes were even typed).
   function computeParsed() {
     if (digits === '') return null;
-    return PayMath.parseTimeDigits(digits, meridiem);
+    if (meridiem !== null) return PayMath.parseTimeDigits(digits, meridiem);
+    if (digits.length === 4) return PayMath.parseTimeDigits(digits, null);
+    return null;
   }
 
   function renderPreview() {
@@ -749,7 +765,7 @@ function buildUsualStartField(worker) {
 // Task 8: Attendance flags + weekly hours chart (inside workerExtras)
 // ---------------------------------------------------------------------------
 
-const ATTENDANCE_WEEKS_BACK = 8;
+const ATTENDANCE_WEEKS_BACK = 2;
 const ATTENDANCE_GRACE_MIN = 15;
 const ATTENDANCE_ROW_CAP = 10;
 
@@ -959,8 +975,11 @@ function formatShortDate(iso) {
 // entry's lunch value AS IS, including 0 or undefined (legacy entries
 // written before this feature never had a lunch key — undefined means "no
 // deduction", never guessed at). A day with no stored entry yet is preloaded
-// with lunch: 30 so the first time it becomes a complete pair, it commits
-// with the default 30-minute deduction already in place.
+// with Store.lunchDefault(state.data) (30 unless the owner changed it in
+// Settings) so the first time it becomes a complete pair, it commits with
+// that default deduction already in place. This ONLY affects brand-new
+// days — a day already saved keeps its own stored lunch untouched even if
+// the setting changes later, since it's read from `stored`, not recomputed.
 let weekDraft = null;
 let weekDraftKey = null;
 
@@ -969,7 +988,7 @@ function buildWeekDraft(worker, mondayIso) {
   const draft = {};
   Store.weekDates(mondayIso).forEach((date) => {
     const e = stored[date];
-    draft[date] = { start: e ? e.start : null, end: e ? e.end : null, lunch: e ? e.lunch : 30 };
+    draft[date] = { start: e ? e.start : null, end: e ? e.end : null, lunch: e ? e.lunch : Store.lunchDefault(state.data) };
   });
   return draft;
 }
@@ -1003,7 +1022,7 @@ function commitDay(worker, date) {
     state.data.entries[worker.id][date] = { start: entry.start, end: entry.end, lunch: entry.lunch };
   } else {
     delete stored[date];
-    entry.lunch = 30; // deleted day resets to the default for its next commit
+    entry.lunch = Store.lunchDefault(state.data); // deleted day resets to the default for its next commit
   }
   Store.save(state.data);
 }
@@ -1138,23 +1157,35 @@ function buildWeekDayRow(worker, date, shortName, fullName) {
     row.appendChild(note);
   }
 
-  // Lunch toggle chip: only for a day with a complete, valid entry. Missing
-  // lunch (legacy days with no lunch key) renders as "off" — no deduction is
-  // exactly what's already happening, and a tap normalizes the entry to the
-  // explicit 30-minute default.
+  // Lunch toggle chip + paid-time sub-display: only for a day with a
+  // complete, valid entry. Missing lunch (legacy days with no lunch key)
+  // renders as "off" — no deduction is exactly what's already happening, and
+  // a tap normalizes the entry to the current default lunch length.
   if (PayMath.isValidPair(entry.start, entry.end)) {
+    const bottom = document.createElement('div');
+    bottom.className = 'week-day-bottom';
+
     const on = !!entry.lunch;
     const chip = document.createElement('button');
     chip.type = 'button';
     chip.className = 'lunch-chip ' + (on ? 'lunch-chip-on' : 'lunch-chip-off');
-    chip.textContent = on ? 'Lunch 30 min' : 'No lunch';
+    chip.textContent = on ? ('Lunch ' + entry.lunch + ' min') : 'No lunch';
     chip.setAttribute('aria-pressed', String(on));
     chip.addEventListener('click', () => {
-      entry.lunch = on ? 0 : 30;
+      entry.lunch = on ? 0 : Store.lunchDefault(state.data);
       commitDay(worker, date);
       renderWeek();
     });
-    row.appendChild(chip);
+    bottom.appendChild(chip);
+
+    // Low-contrast "8 hr 8 min" phrasing next to the prominent decimal
+    // hours above — paid is guaranteed non-null here since isValidPair passed.
+    const duration = document.createElement('span');
+    duration.className = 'week-day-duration';
+    duration.textContent = PayMath.formatDuration(paid);
+    bottom.appendChild(duration);
+
+    row.appendChild(bottom);
   }
 
   return row;
@@ -1332,12 +1363,15 @@ function renderBackupBanner() {
 // Task 7: Settings (screen-settings) — Send Data / Import / Change PIN
 // ---------------------------------------------------------------------------
 
-// Nothing on this screen depends on which worker/week is current, so there's
-// no per-visit computation — the static controls are wired once at boot,
-// same pattern as screen-workers/screen-worker's static buttons. Registered
-// as SCREENS' render anyway so navigateTo('screen-settings') has a hook if a
-// later task needs one.
-function renderSettings() {}
+// The static controls (Send Data, Import, Change PIN) are wired once at
+// boot, same pattern as screen-workers/screen-worker's static buttons. This
+// render fn (v2) only refreshes the two pieces that DO depend on current
+// data: the lunch-length pills, and closing any previously-open delete list
+// so re-entering Settings never shows a stale worker list from a prior visit.
+function renderSettings() {
+  renderLunchSettings();
+  document.getElementById('deleteWorkerArea').textContent = '';
+}
 
 // Guards against a second Send Data tap firing a second share/download while
 // the first is still in flight (e.g. the share sheet takes a moment to open,
@@ -1432,15 +1466,107 @@ function handleChangePin() {
   navigateTo('screen-pin');
 }
 
-function deleteCurrentWorker() {
-  const worker = getCurrentWorker();
+// ---------------------------------------------------------------------------
+// Task 13 (v2): Delete a worker — moved from the worker screen into Settings
+// (a plain button on the worker page was too easy to hit by accident). Tap
+// "Delete a worker…" to expand an inline list of every worker; tapping a
+// row's own delete affordance confirms by name, then removes the worker and
+// all their entries the same way the old screen-worker button did.
+// ---------------------------------------------------------------------------
+
+function deleteWorkerById(workerId) {
+  const worker = state.data.workers.find((w) => w.id === workerId);
   if (!worker) return;
-  if (!confirm(`Delete ${worker.name}? This removes all their hours too.`)) return;
-  state.data.workers = state.data.workers.filter((w) => w.id !== worker.id);
-  delete state.data.entries[worker.id];
-  state.currentWorkerId = null;
+  if (!confirm(`Delete ${worker.name}? Their hours history is deleted too. This cannot be undone.`)) return;
+  state.data.workers = state.data.workers.filter((w) => w.id !== workerId);
+  delete state.data.entries[workerId];
+  if (state.currentWorkerId === workerId) state.currentWorkerId = null;
   Store.save(state.data);
-  navigateTo('screen-workers');
+  renderDeleteWorkerList();
+}
+
+function renderDeleteWorkerList() {
+  const area = document.getElementById('deleteWorkerArea');
+  area.textContent = '';
+
+  if (state.data.workers.length === 0) {
+    const p = document.createElement('p');
+    p.className = 'empty-state';
+    p.textContent = 'No workers to delete.';
+    area.appendChild(p);
+    return;
+  }
+
+  state.data.workers.forEach((w) => {
+    const row = document.createElement('div');
+    row.className = 'delete-worker-row';
+
+    const name = document.createElement('span');
+    name.className = 'delete-worker-name';
+    name.textContent = w.name;
+
+    const delBtn = document.createElement('button');
+    delBtn.type = 'button';
+    delBtn.className = 'delete-worker-btn';
+    delBtn.textContent = 'delete';
+    delBtn.addEventListener('click', () => deleteWorkerById(w.id));
+
+    row.appendChild(name);
+    row.appendChild(delBtn);
+    area.appendChild(row);
+  });
+}
+
+// Toggles the inline worker list open/closed under "Delete a worker…",
+// mirroring showAddWorkerForm's toggle-by-checking-childNodes pattern.
+function toggleDeleteWorkerList() {
+  const area = document.getElementById('deleteWorkerArea');
+  if (area.childNodes.length > 0) {
+    area.textContent = '';
+    return;
+  }
+  renderDeleteWorkerList();
+}
+
+// ---------------------------------------------------------------------------
+// Task 13 (v2): Configurable lunch length (Settings)
+// ---------------------------------------------------------------------------
+
+const LUNCH_PILL_OPTIONS = [15, 30, 45, 60];
+
+function renderLunchSettings() {
+  const area = document.getElementById('lunchPillsArea');
+  area.textContent = '';
+
+  const current = Store.lunchDefault(state.data);
+  // A custom value imported from another install (not one of the four
+  // presets) still needs to show as the selected option rather than looking
+  // like nothing is chosen, so it's added as a fifth pill.
+  const options = LUNCH_PILL_OPTIONS.includes(current)
+    ? LUNCH_PILL_OPTIONS.slice()
+    : LUNCH_PILL_OPTIONS.concat(current).sort((a, b) => a - b);
+
+  options.forEach((mins) => {
+    const pill = document.createElement('button');
+    pill.type = 'button';
+    pill.className = 'lunch-pill' + (mins === current ? ' lunch-pill-active' : '');
+    pill.textContent = mins + ' min';
+    pill.setAttribute('aria-pressed', String(mins === current));
+    pill.addEventListener('click', () => {
+      state.data.lunchMinutes = mins;
+      Store.save(state.data);
+      // The currently-cached weekDraft (if any) preloaded its still-empty
+      // days with whatever default was active when it was built — without
+      // invalidating it here, a day typed in an already-open week right
+      // after changing this setting would silently commit with the OLD
+      // default instead of the one just chosen. Same rationale as the
+      // import path just below invalidating the draft on a full data swap.
+      weekDraft = null;
+      weekDraftKey = null;
+      renderLunchSettings();
+    });
+    area.appendChild(pill);
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -1481,13 +1607,13 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('sendDataBtn').addEventListener('click', handleSendData);
   document.getElementById('importFileInput').addEventListener('change', handleImportFileChange);
   document.getElementById('changePinBtn').addEventListener('click', handleChangePin);
+  document.getElementById('deleteWorkerToggleBtn').addEventListener('click', toggleDeleteWorkerList);
 
   // screen-worker static controls
   document.getElementById('enterHoursBtn').addEventListener('click', () => {
     state.currentMonday = Store.mondayOf(todayIso());
     navigateTo('screen-week');
   });
-  document.getElementById('deleteWorkerBtn').addEventListener('click', deleteCurrentWorker);
 });
 
 if ('serviceWorker' in navigator) {

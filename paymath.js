@@ -75,6 +75,17 @@
     return totalCents / 100;
   }
 
+  // "8 hr 8 min" / "8 hr" / "45 min" — low-emphasis sub-display of paid time
+  // next to the prominent decimal hours. Pure minutes-in, phrase-out; no
+  // rounding involved (paidMinutes is already a whole-minute integer).
+  function formatDuration(minutes) {
+    const h = Math.floor(minutes / 60);
+    const m = minutes % 60;
+    if (h === 0) return m + ' min';
+    if (m === 0) return h + ' hr';
+    return h + ' hr ' + m + ' min';
+  }
+
   function formatTime(minutes) {
     let h = Math.floor(minutes / 60), m = minutes % 60;
     const mer = h < 12 ? 'AM' : 'PM';
@@ -82,5 +93,5 @@
     return h + ':' + String(m).padStart(2, '0') + ' ' + mer;
   }
 
-  return { parseTimeDigits, workedMinutes, paidMinutes, toDecimal, splitOvertime, grossEstimate, formatTime, guessMeridiem, isValidPair };
+  return { parseTimeDigits, workedMinutes, paidMinutes, toDecimal, splitOvertime, grossEstimate, formatTime, formatDuration, guessMeridiem, isValidPair };
 });

@@ -9,6 +9,14 @@
 
   function isMinutes(v) { return Number.isInteger(v) && v >= 0 && v <= 1439; }
 
+  // Optional top-level lunch-length setting. Missing (legacy data, or a fresh
+  // install that never touched Settings) reads as 30 — the long-standing
+  // default — so old and new installs behave identically until the owner
+  // explicitly changes it.
+  function lunchDefault(data) {
+    return Number.isInteger(data.lunchMinutes) ? data.lunchMinutes : 30;
+  }
+
   // Fail-closed validation: returns the parsed data only if every level of the
   // shape checks out; returns null for anything else. Must NEVER throw — this
   // guards both file imports and every app boot via load().
@@ -20,6 +28,7 @@
       if (d.pin !== null && !(typeof d.pin === 'string' && /^\d{4}$/.test(d.pin))) return null;
       if (!Array.isArray(d.workers)) return null;
       if (typeof d.entries !== 'object' || d.entries === null || Array.isArray(d.entries)) return null;
+      if (d.lunchMinutes !== undefined && !(Number.isInteger(d.lunchMinutes) && d.lunchMinutes >= 0 && d.lunchMinutes <= 240)) return null;
       const ids = new Set();
       for (const w of d.workers) {
         if (!w || typeof w !== 'object' || Array.isArray(w)) return null;
@@ -149,5 +158,5 @@
     }
   }
 
-  return { emptyData, validateImport, mondayOf, weekDates, weekMinutes, lateDays, missedDays, load, save, KEY };
+  return { emptyData, validateImport, lunchDefault, mondayOf, weekDates, weekMinutes, lateDays, missedDays, load, save, KEY };
 });

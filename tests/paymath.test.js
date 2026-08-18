@@ -81,6 +81,12 @@ test('paidMinutes: deducts lunch, floors at 0, legacy undefined = 0', () => {
   assert.strictEqual(P.paidMinutes(390, 410, 30), 0);      // 20min shift, floor at 0
   assert.strictEqual(P.paidMinutes(900, 390, 30), null);   // invalid pair stays null
 });
+test('formatDuration: hr/min phrasing', () => {
+  assert.strictEqual(P.formatDuration(488), '8 hr 8 min');
+  assert.strictEqual(P.formatDuration(480), '8 hr');
+  assert.strictEqual(P.formatDuration(45), '45 min');
+  assert.strictEqual(P.formatDuration(0), '0 min');
+});
 test('isValidPair: contract predicate', () => {
   assert.strictEqual(P.isValidPair(390, 900), true);
   assert.strictEqual(P.isValidPair(900, 390), false);
