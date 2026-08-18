@@ -372,13 +372,22 @@ function genId() {
   return Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
 }
 
+// ISO date string -> Date object anchored at noon local time, timezone-safe
+// (dodges DST edges the way storage.js's own date math does). Every date
+// formatter in this file (formatWeekRange, formatFlagDate, formatShortDate)
+// and the backup-banner staleness check build on this shared construction
+// rather than repeating `new Date(iso + 'T12:00:00')` themselves.
+function isoNoon(iso) {
+  return new Date(iso + 'T12:00:00');
+}
+
 function getCurrentWorker() {
   return state.data.workers.find((w) => w.id === state.currentWorkerId) || null;
 }
 
 function formatWeekRange(mondayIso) {
-  const start = new Date(mondayIso + 'T12:00:00');
-  const end = new Date(Store.weekDates(mondayIso)[6] + 'T12:00:00');
+  const start = isoNoon(mondayIso);
+  const end = isoNoon(Store.weekDates(mondayIso)[6]);
   const fmt = (d) => d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
   return fmt(start) + ' – ' + fmt(end);
 }
@@ -748,7 +757,7 @@ const ATTENDANCE_ROW_CAP = 10;
 // (the week-history/nav "8/10" numeric style is formatShortDate, kept
 // separate since it reads better in a dense list here).
 function formatFlagDate(iso) {
-  const d = new Date(iso + 'T12:00:00');
+  const d = isoNoon(iso);
   const dayIdx = (d.getDay() + 6) % 7; // Mon=0 .. Sun=6, matches DAY_NAMES_SHORT
   const month = d.toLocaleDateString('en-US', { month: 'short' });
   return DAY_NAMES_SHORT[dayIdx] + ' ' + month + ' ' + d.getDate();
@@ -927,13 +936,13 @@ const DAY_NAMES_FULL = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 
 const DAY_NAMES_SHORT = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 
 function addDaysIso(iso, delta) {
-  const d = new Date(iso + 'T12:00:00');
+  const d = isoNoon(iso);
   d.setDate(d.getDate() + delta);
   return d.toISOString().slice(0, 10);
 }
 
 function formatShortDate(iso) {
-  const d = new Date(iso + 'T12:00:00');
+  const d = isoNoon(iso);
   return (d.getMonth() + 1) + '/' + d.getDate();
 }
 
@@ -1266,7 +1275,7 @@ function getBackupMeta() {
     // by some future/older version, manual tampering, etc.) must NOT
     // permanently suppress the reminder — treat it the same as "never
     // exported" rather than returning meta that daysSince() can't use.
-    if (isNaN(new Date(parsed.lastExport + 'T12:00:00').getTime())) return null;
+    if (isNaN(isoNoon(parsed.lastExport).getTime())) return null;
     return parsed;
   } catch {
     return null; // corrupted meta reads the same as "never exported"
@@ -1282,8 +1291,8 @@ function recordExport() {
 }
 
 function daysSince(iso) {
-  const then = new Date(iso + 'T12:00:00');
-  const now = new Date(todayIso() + 'T12:00:00');
+  const then = isoNoon(iso);
+  const now = isoNoon(todayIso());
   return Math.round((now - then) / 86400000);
 }
 
