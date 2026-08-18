@@ -355,6 +355,149 @@
     .history-row:active { background: #eef2f7; }
     .history-week { font-size: var(--font-body); font-weight: 600; }
     .history-hours { font-size: var(--font-body); color: var(--color-text-muted); }
+
+    /* ---------- Utilities ---------- */
+    .mt-3 { margin-top: var(--space-3); }
+
+    /* ---------- Week entry screen (Task 6) ---------- */
+    .week-nav {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: var(--space-2);
+      margin-bottom: var(--space-4);
+    }
+    .week-nav-btn {
+      min-width: 48px;
+      min-height: 48px;
+      font-size: 1.5rem;
+      font-weight: 700;
+      border-radius: 12px;
+      border: 1px solid var(--color-border);
+      background: var(--color-surface);
+      color: var(--color-accent);
+    }
+    .week-nav-btn:active { background: #e2e8f0; }
+    .week-nav-label { flex: 1; text-align: center; }
+    .week-worker-name { font-size: var(--font-lg); font-weight: 700; }
+    .week-range { color: var(--color-text-muted); font-size: 0.95rem; margin-top: 2px; }
+
+    .week-day-row {
+      background: var(--color-surface);
+      border: 1px solid var(--color-border);
+      border-radius: 12px;
+      padding: var(--space-3);
+      margin-bottom: var(--space-2);
+    }
+    .week-day-top {
+      display: flex;
+      align-items: center;
+      gap: var(--space-2);
+    }
+    .week-day-label {
+      font-weight: 700;
+      min-width: 58px;
+    }
+    .week-day-times {
+      display: flex;
+      gap: var(--space-2);
+      flex: 1;
+    }
+    .week-time-btn {
+      flex: 1;
+      min-height: 48px;
+      font-size: 1rem;
+    }
+    .week-day-hours {
+      min-width: 52px;
+      text-align: right;
+      font-weight: 700;
+    }
+    .week-day-note {
+      color: var(--color-danger);
+      font-size: 0.9rem;
+      margin-top: 8px;
+    }
+
+    .week-footer {
+      margin-top: var(--space-4);
+      text-align: center;
+      padding: var(--space-3);
+      background: var(--color-surface);
+      border: 1px solid var(--color-border);
+      border-radius: 12px;
+    }
+    .week-footer-label {
+      font-size: 0.9rem;
+      color: var(--color-text-muted);
+      margin-bottom: 4px;
+    }
+    .week-footer-total {
+      font-size: var(--font-lg);
+      font-weight: 700;
+    }
+
+    /* ---------- Time entry keypad panel (Task 6) ---------- */
+    .time-panel-overlay {
+      position: fixed;
+      inset: 0;
+      z-index: 100;
+      background: var(--color-bg);
+      display: flex;
+      flex-direction: column;
+      padding: var(--space-4) 20px;
+      padding-top: calc(var(--space-4) + env(safe-area-inset-top));
+      padding-bottom: calc(var(--space-4) + env(safe-area-inset-bottom));
+      overflow-y: auto;
+      -webkit-overflow-scrolling: touch;
+    }
+    .time-panel-title {
+      font-size: var(--font-lg);
+      font-weight: 700;
+      text-align: center;
+    }
+    .time-panel-was {
+      color: var(--color-text-muted);
+      text-align: center;
+      margin-top: 4px;
+      font-size: 0.95rem;
+    }
+    .time-panel-preview {
+      font-size: var(--font-xl);
+      font-weight: 800;
+      text-align: center;
+      color: var(--color-accent);
+      margin: var(--space-4) 0 var(--space-2);
+      min-height: 1.3em;
+    }
+    .time-panel-preview.shake { animation: shake 0.5s; color: var(--color-danger); }
+    .time-panel-digits {
+      text-align: center;
+      color: var(--color-text-muted);
+      font-size: 1.1rem;
+      min-height: 1.5em;
+      margin-bottom: var(--space-3);
+      letter-spacing: 0.05em;
+    }
+    .time-panel-keypad {
+      margin: 0 auto var(--space-3);
+    }
+    .time-panel-meridiem {
+      display: flex;
+      gap: var(--space-2);
+      max-width: 340px;
+      width: 100%;
+      margin: 0 auto var(--space-4);
+    }
+    .time-panel-actions {
+      display: flex;
+      flex-direction: column;
+      gap: var(--space-2);
+      max-width: 340px;
+      width: 100%;
+      margin: auto auto 0;
+    }
+    .time-panel-actions .btn { width: 100%; }
   </style>
 </head>
 <body>
@@ -396,7 +539,7 @@
         <div id="workersList"></div>
         <div id="addWorkerArea"></div>
         <button type="button" id="addWorkerBtn" class="btn btn-primary btn-block">+ Add worker</button>
-        <button type="button" id="paydaySummaryBtn" class="btn btn-block" style="margin-top: var(--space-2);">Payday summary</button>
+        <button type="button" id="paydaySummaryBtn" class="btn btn-block mt-3">Payday summary</button>
         <button type="button" id="settingsBtn" class="settings-link">Settings</button>
       </div>
     </section>
@@ -407,16 +550,14 @@
         <button type="button" id="enterHoursBtn" class="btn btn-primary btn-block">Enter hours</button>
         <h3 class="section-heading">Week history</h3>
         <div id="workerHistory"></div>
-        <div id="worker-extras"></div>
-        <button type="button" id="deleteWorkerBtn" class="btn btn-danger btn-block" style="margin-top: var(--space-4);">Delete worker</button>
+        <!-- Task 8 fills this: late/missed flags + hours chart -->
+        <div id="workerExtras"></div>
+        <button type="button" id="deleteWorkerBtn" class="btn btn-danger btn-block mt-3">Delete worker</button>
       </div>
     </section>
 
     <section id="screen-week" class="screen" hidden>
-      <div class="screen-content screen-placeholder">
-        <h2>Week</h2>
-        <p>Week entry goes here (Task 7).</p>
-      </div>
+      <div id="weekContent" class="screen-content"></div>
     </section>
 
     <section id="screen-payday" class="screen" hidden>

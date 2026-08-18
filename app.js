@@ -12,7 +12,7 @@ const SCREENS = {
   'screen-pin':     { title: '',        back: null,             render: null },
   'screen-workers': { title: 'Workers', back: null,             render: () => renderWorkers() },
   'screen-worker':  { title: 'Worker',  back: 'screen-workers', render: () => renderWorker() },
-  'screen-week':    { title: 'Week',    back: 'screen-worker',  render: null }, // Task 7 sets render; back may be set dynamically later
+  'screen-week':    { title: 'Week',    back: 'screen-worker',  render: () => renderWeek() },
   'screen-payday':  { title: 'Payday',  back: 'screen-workers', render: null }, // Task 8 sets render
 };
 
@@ -165,6 +165,188 @@ function handleBackspace() {
 }
 
 // ---------------------------------------------------------------------------
+// Task 6: promptTime — reusable full-screen keypad time-entry panel
+// ---------------------------------------------------------------------------
+
+// opts: { title, current, allowClear = true, onDone }.
+// current is minutes-since-midnight or null. onDone(minutes) fires on Done
+// with the parsed minutes, or on Clear with null (only when allowClear);
+// it is never called on Cancel. The panel always starts with an EMPTY digit
+// buffer even when `current` is set — retyping is faster than editing — but
+// shows the old value as "was 6:30 AM" so the prior entry isn't a mystery.
+function promptTime(opts) {
+  const onDone = opts.onDone;
+  const current = opts.current;
+  const allowClear = opts.allowClear !== false;
+
+  let digits = '';
+  let meridiem = null;        // 'AM' | 'PM' | null (no selection yet)
+  let meridiemLocked = false; // true once the user explicitly taps AM/PM; stops auto-preselect
+
+  const overlay = document.createElement('div');
+  overlay.className = 'time-panel-overlay';
+
+  const titleEl = document.createElement('h2');
+  titleEl.className = 'time-panel-title';
+  titleEl.textContent = opts.title;
+
+  const wasEl = document.createElement('p');
+  wasEl.className = 'time-panel-was';
+  wasEl.textContent = current != null ? ('was ' + PayMath.formatTime(current)) : 'was not set';
+
+  const previewEl = document.createElement('div');
+  previewEl.className = 'time-panel-preview';
+
+  const digitsEl = document.createElement('div');
+  digitsEl.className = 'time-panel-digits';
+
+  const keypad = document.createElement('div');
+  keypad.className = 'keypad time-panel-keypad';
+  ['1', '2', '3', '4', '5', '6', '7', '8', '9', null, '0', 'back'].forEach((k) => {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    if (k === null) {
+      btn.className = 'key key-blank';
+      btn.tabIndex = -1;
+      btn.setAttribute('aria-hidden', 'true');
+      btn.disabled = true;
+    } else if (k === 'back') {
+      btn.className = 'key key-back';
+      btn.setAttribute('aria-label', 'Backspace');
+      btn.textContent = '⌫';
+      btn.addEventListener('click', () => {
+        digits = digits.slice(0, -1);
+        recomputeMeridiem();
+        renderPreview();
+      });
+    } else {
+      btn.className = 'key';
+      btn.textContent = k;
+      btn.addEventListener('click', () => {
+        if (digits.length >= 4) return;
+        digits += k;
+        recomputeMeridiem();
+        renderPreview();
+      });
+    }
+    keypad.appendChild(btn);
+  });
+
+  const meridiemWrap = document.createElement('div');
+  meridiemWrap.className = 'time-panel-meridiem';
+  const amBtn = document.createElement('button');
+  amBtn.type = 'button';
+  amBtn.className = 'meridiem-btn';
+  amBtn.textContent = 'AM';
+  const pmBtn = document.createElement('button');
+  pmBtn.type = 'button';
+  pmBtn.className = 'meridiem-btn';
+  pmBtn.textContent = 'PM';
+  amBtn.addEventListener('click', () => {
+    meridiem = 'AM';
+    meridiemLocked = true;
+    renderPreview();
+  });
+  pmBtn.addEventListener('click', () => {
+    meridiem = 'PM';
+    meridiemLocked = true;
+    renderPreview();
+  });
+  meridiemWrap.appendChild(amBtn);
+  meridiemWrap.appendChild(pmBtn);
+
+  const actions = document.createElement('div');
+  actions.className = 'time-panel-actions';
+  const doneBtn = document.createElement('button');
+  doneBtn.type = 'button';
+  doneBtn.className = 'btn btn-confirm';
+  doneBtn.textContent = 'Done';
+  const clearBtn = document.createElement('button');
+  clearBtn.type = 'button';
+  clearBtn.className = 'btn';
+  clearBtn.textContent = 'Clear';
+  const cancelBtn = document.createElement('button');
+  cancelBtn.type = 'button';
+  cancelBtn.className = 'btn';
+  cancelBtn.textContent = 'Cancel';
+  actions.appendChild(doneBtn);
+  if (allowClear) actions.appendChild(clearBtn);
+  actions.appendChild(cancelBtn);
+
+  overlay.appendChild(titleEl);
+  overlay.appendChild(wasEl);
+  overlay.appendChild(previewEl);
+  overlay.appendChild(digitsEl);
+  overlay.appendChild(keypad);
+  overlay.appendChild(meridiemWrap);
+  overlay.appendChild(actions);
+  document.body.appendChild(overlay);
+
+  // Hour derived the same way PayMath.parseTimeDigits derives it, used only
+  // to pick a smart default meridiem while digits are still coming in.
+  function typedHour() {
+    if (digits === '') return null;
+    return digits.length <= 2 ? parseInt(digits, 10) : parseInt(digits.slice(0, -2), 10);
+  }
+
+  // Paper sheets say "6:30" meaning AM and "3:00" meaning PM — hours 5-11
+  // preselect AM, hours 12 and 1-4 preselect PM, so dad doesn't have to tap
+  // AM/PM for the obvious cases. Recomputed on every digit change unless the
+  // user has explicitly tapped AM/PM (meridiemLocked).
+  function recomputeMeridiem() {
+    if (meridiemLocked) return;
+    const h = typedHour();
+    if (h === null) { meridiem = null; return; }
+    if (h >= 5 && h <= 11) meridiem = 'AM';
+    else if (h === 12 || (h >= 1 && h <= 4)) meridiem = 'PM';
+    else meridiem = null;
+  }
+
+  // If digits form a valid 24h time (e.g. "1400") and no meridiem is
+  // selected, parseTimeDigits(digits, null) reads it as 24h entry.
+  function computeParsed() {
+    if (digits === '') return null;
+    return PayMath.parseTimeDigits(digits, meridiem);
+  }
+
+  function renderPreview() {
+    digitsEl.textContent = digits;
+    amBtn.classList.toggle('selected', meridiem === 'AM');
+    pmBtn.classList.toggle('selected', meridiem === 'PM');
+    const parsed = computeParsed();
+    previewEl.textContent = parsed != null ? PayMath.formatTime(parsed) : '—';
+  }
+
+  function shakePreview() {
+    previewEl.classList.remove('shake');
+    void previewEl.offsetWidth; // force reflow so the animation restarts if triggered twice in a row
+    previewEl.classList.add('shake');
+    previewEl.addEventListener('animationend', () => previewEl.classList.remove('shake'), { once: true });
+  }
+
+  function close() {
+    overlay.remove();
+  }
+
+  doneBtn.addEventListener('click', () => {
+    const parsed = computeParsed();
+    if (parsed === null) {
+      shakePreview();
+      return;
+    }
+    close();
+    onDone(parsed);
+  });
+  clearBtn.addEventListener('click', () => {
+    close();
+    onDone(null);
+  });
+  cancelBtn.addEventListener('click', close);
+
+  renderPreview();
+}
+
+// ---------------------------------------------------------------------------
 // Shared helpers (Task 5+)
 // ---------------------------------------------------------------------------
 
@@ -188,8 +370,7 @@ function getCurrentWorker() {
 
 function formatWeekRange(mondayIso) {
   const start = new Date(mondayIso + 'T12:00:00');
-  const end = new Date(mondayIso + 'T12:00:00');
-  end.setDate(end.getDate() + 6);
+  const end = new Date(Store.weekDates(mondayIso)[6] + 'T12:00:00');
   const fmt = (d) => d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
   return fmt(start) + ' – ' + fmt(end);
 }
@@ -351,7 +532,7 @@ function renderWorker() {
 
       const total = document.createElement('span');
       total.className = 'history-hours';
-      total.textContent = PayMath.toDecimal(Store.weekMinutes(state.data, worker.id, mondayIso)).toFixed(2);
+      total.textContent = PayMath.toDecimal(Store.weekMinutes(state.data, worker.id, mondayIso)).toFixed(2) + ' hrs';
 
       row.appendChild(label);
       row.appendChild(total);
@@ -452,8 +633,8 @@ function buildRateField(worker) {
   return row;
 }
 
-// Minimal inline time entry, contained in one function so Task 6's reusable
-// keypad panel can swap it out without touching the rest of renderWorker().
+// Uses the Task 6 promptTime() keypad panel — this function was kept small
+// and swappable from Task 5 specifically for this replacement.
 function buildUsualStartField(worker) {
   const row = document.createElement('div');
   row.className = 'field-row';
@@ -472,106 +653,235 @@ function buildUsualStartField(worker) {
   editBtn.type = 'button';
   editBtn.className = 'btn';
   editBtn.textContent = 'Edit';
+  editBtn.addEventListener('click', () => {
+    promptTime({
+      title: 'Usual start time',
+      current: worker.usualStart,
+      allowClear: true,
+      onDone: (minutes) => {
+        worker.usualStart = minutes; // null means cleared
+        Store.save(state.data);
+        value.textContent = minutes != null ? PayMath.formatTime(minutes) : 'Not set';
+      },
+    });
+  });
   display.appendChild(value);
   display.appendChild(editBtn);
   row.appendChild(display);
 
-  const editArea = document.createElement('div');
-  editArea.className = 'start-time-edit';
-  editArea.hidden = true;
+  return row;
+}
 
-  const digitsInput = document.createElement('input');
-  digitsInput.type = 'text';
-  digitsInput.inputMode = 'numeric';
-  digitsInput.placeholder = 'e.g. 630 for 6:30';
+// ---------------------------------------------------------------------------
+// Task 6: Week entry (screen-week)
+// ---------------------------------------------------------------------------
 
-  const meridiemWrap = document.createElement('div');
-  meridiemWrap.className = 'meridiem-toggle';
-  const amBtn = document.createElement('button');
-  amBtn.type = 'button';
-  amBtn.className = 'meridiem-btn selected';
-  amBtn.textContent = 'AM';
-  const pmBtn = document.createElement('button');
-  pmBtn.type = 'button';
-  pmBtn.className = 'meridiem-btn';
-  pmBtn.textContent = 'PM';
-  let meridiem = 'AM';
-  amBtn.addEventListener('click', () => {
-    meridiem = 'AM';
-    amBtn.classList.add('selected');
-    pmBtn.classList.remove('selected');
+const DAY_NAMES_FULL = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+const DAY_NAMES_SHORT = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+
+function addDaysIso(iso, delta) {
+  const d = new Date(iso + 'T12:00:00');
+  d.setDate(d.getDate() + delta);
+  return d.toISOString().slice(0, 10);
+}
+
+function formatShortDate(iso) {
+  const d = new Date(iso + 'T12:00:00');
+  return (d.getMonth() + 1) + '/' + d.getDate();
+}
+
+// In-memory per-day draft for the week currently on screen, keyed by ISO
+// date: { start: minutes|null, end: minutes|null }. Lives outside the
+// storage contract deliberately — an invalid/incomplete pair (e.g. end <=
+// start) must stay visible with its "end before start" note even though it
+// is never written to state.data.entries. Rebuilt only when the worker or
+// week being viewed changes (see weekDraftKey below), so edits survive
+// re-renders triggered by promptTime while browsing the same week.
+let weekDraft = null;
+let weekDraftKey = null;
+
+function buildWeekDraft(worker, mondayIso) {
+  const stored = state.data.entries[worker.id] || {};
+  const draft = {};
+  Store.weekDates(mondayIso).forEach((date) => {
+    const e = stored[date];
+    draft[date] = { start: e ? e.start : null, end: e ? e.end : null };
   });
-  pmBtn.addEventListener('click', () => {
-    meridiem = 'PM';
-    pmBtn.classList.add('selected');
-    amBtn.classList.remove('selected');
-  });
-  meridiemWrap.appendChild(amBtn);
-  meridiemWrap.appendChild(pmBtn);
+  return draft;
+}
 
-  const hint = document.createElement('p');
-  hint.className = 'field-hint';
-  hint.textContent = 'Enter a valid time, e.g. 630 for 6:30.';
+// STORAGE CONTRACT: only complete valid pairs (both set, end > start) are
+// ever written; anything else (missing side, or end <= start) means the
+// date key is deleted entirely — absent = no work, never a half/wrong entry.
+function commitDay(worker, date) {
+  const entry = weekDraft[date];
+  const valid = entry.start != null && entry.end != null && entry.end > entry.start;
+  if (valid) {
+    if (!state.data.entries[worker.id]) state.data.entries[worker.id] = {};
+    state.data.entries[worker.id][date] = { start: entry.start, end: entry.end };
+  } else if (state.data.entries[worker.id]) {
+    delete state.data.entries[worker.id][date];
+  }
+  Store.save(state.data);
+}
 
-  const actions = document.createElement('div');
-  actions.className = 'start-time-actions';
-  const setBtn = document.createElement('button');
-  setBtn.type = 'button';
-  setBtn.className = 'btn btn-confirm';
-  setBtn.textContent = 'Set';
-  const clearBtn = document.createElement('button');
-  clearBtn.type = 'button';
-  clearBtn.className = 'btn';
-  clearBtn.textContent = 'Clear';
-  const cancelBtn = document.createElement('button');
-  cancelBtn.type = 'button';
-  cancelBtn.className = 'btn';
-  cancelBtn.textContent = 'Cancel';
-  actions.appendChild(setBtn);
-  actions.appendChild(clearBtn);
-  actions.appendChild(cancelBtn);
+function renderWeek() {
+  const worker = getCurrentWorker();
+  const container = document.getElementById('weekContent');
+  container.textContent = '';
 
-  editArea.appendChild(digitsInput);
-  editArea.appendChild(meridiemWrap);
-  editArea.appendChild(hint);
-  editArea.appendChild(actions);
-  row.appendChild(editArea);
+  if (!worker) {
+    const p = document.createElement('p');
+    p.className = 'empty-state';
+    p.textContent = 'Worker not found.';
+    container.appendChild(p);
+    return;
+  }
 
-  editBtn.addEventListener('click', () => {
-    editArea.hidden = !editArea.hidden;
-    if (!editArea.hidden) {
-      digitsInput.value = '';
-      digitsInput.classList.remove('field-invalid');
-      hint.classList.remove('show');
-      meridiem = 'AM';
-      amBtn.classList.add('selected');
-      pmBtn.classList.remove('selected');
-      digitsInput.focus();
-    }
+  const mondayIso = state.currentMonday;
+  const key = worker.id + '|' + mondayIso;
+  if (key !== weekDraftKey) {
+    weekDraft = buildWeekDraft(worker, mondayIso);
+    weekDraftKey = key;
+  }
+
+  // ---- Top: worker name, week range, prev/next ----
+  const nav = document.createElement('div');
+  nav.className = 'week-nav';
+
+  const prevBtn = document.createElement('button');
+  prevBtn.type = 'button';
+  prevBtn.className = 'week-nav-btn';
+  prevBtn.textContent = '◀';
+  prevBtn.setAttribute('aria-label', 'Previous week');
+  prevBtn.addEventListener('click', () => {
+    state.currentMonday = addDaysIso(state.currentMonday, -7);
+    renderWeek();
   });
-  cancelBtn.addEventListener('click', () => { editArea.hidden = true; });
-  setBtn.addEventListener('click', () => {
-    const parsed = PayMath.parseTimeDigits(digitsInput.value.trim(), meridiem);
-    if (parsed === null) {
-      digitsInput.classList.add('field-invalid');
-      hint.classList.add('show');
-      setTimeout(() => {
-        digitsInput.classList.remove('field-invalid');
-        hint.classList.remove('show');
-      }, 1200);
-      return;
-    }
-    worker.usualStart = parsed;
-    Store.save(state.data);
-    value.textContent = PayMath.formatTime(parsed);
-    editArea.hidden = true;
+
+  const nextBtn = document.createElement('button');
+  nextBtn.type = 'button';
+  nextBtn.className = 'week-nav-btn';
+  nextBtn.textContent = '▶';
+  nextBtn.setAttribute('aria-label', 'Next week');
+  nextBtn.addEventListener('click', () => {
+    state.currentMonday = addDaysIso(state.currentMonday, 7);
+    renderWeek();
   });
-  clearBtn.addEventListener('click', () => {
-    worker.usualStart = null;
-    Store.save(state.data);
-    value.textContent = 'Not set';
-    editArea.hidden = true;
+
+  const navLabel = document.createElement('div');
+  navLabel.className = 'week-nav-label';
+  const nameEl = document.createElement('div');
+  nameEl.className = 'week-worker-name';
+  nameEl.textContent = worker.name;
+  const rangeEl = document.createElement('div');
+  rangeEl.className = 'week-range';
+  rangeEl.textContent = formatWeekRange(mondayIso);
+  navLabel.appendChild(nameEl);
+  navLabel.appendChild(rangeEl);
+
+  nav.appendChild(prevBtn);
+  nav.appendChild(navLabel);
+  nav.appendChild(nextBtn);
+  container.appendChild(nav);
+
+  // ---- One row per day, Mon..Sun ----
+  Store.weekDates(mondayIso).forEach((date, i) => {
+    container.appendChild(buildWeekDayRow(worker, date, DAY_NAMES_SHORT[i], DAY_NAMES_FULL[i]));
   });
+
+  // ---- Footer: weekly total, split into regular/overtime past 40h ----
+  const footer = document.createElement('div');
+  footer.className = 'week-footer';
+  const footerLabel = document.createElement('div');
+  footerLabel.className = 'week-footer-label';
+  footerLabel.textContent = 'Weekly total';
+  const footerTotal = document.createElement('div');
+  footerTotal.className = 'week-footer-total';
+
+  const totalMin = Store.weekMinutes(state.data, worker.id, mondayIso);
+  if (totalMin > 2400) {
+    const split = PayMath.splitOvertime(totalMin);
+    footerTotal.textContent = PayMath.toDecimal(split.regMin).toFixed(2) + ' regular + ' +
+      PayMath.toDecimal(split.otMin).toFixed(2) + ' overtime';
+  } else {
+    footerTotal.textContent = PayMath.toDecimal(totalMin).toFixed(2) + ' hours';
+  }
+
+  footer.appendChild(footerLabel);
+  footer.appendChild(footerTotal);
+  container.appendChild(footer);
+}
+
+function buildWeekDayRow(worker, date, shortName, fullName) {
+  const row = document.createElement('div');
+  row.className = 'week-day-row';
+
+  const top = document.createElement('div');
+  top.className = 'week-day-top';
+
+  const label = document.createElement('span');
+  label.className = 'week-day-label';
+  label.textContent = shortName + ' ' + formatShortDate(date);
+
+  const entry = weekDraft[date];
+
+  const times = document.createElement('div');
+  times.className = 'week-day-times';
+
+  const startBtn = document.createElement('button');
+  startBtn.type = 'button';
+  startBtn.className = 'btn week-time-btn';
+  startBtn.textContent = entry.start != null ? PayMath.formatTime(entry.start) : '—';
+  startBtn.addEventListener('click', () => {
+    promptTime({
+      title: fullName + ' start',
+      current: entry.start,
+      allowClear: true,
+      onDone: (minutes) => {
+        entry.start = minutes;
+        commitDay(worker, date);
+        renderWeek();
+      },
+    });
+  });
+
+  const endBtn = document.createElement('button');
+  endBtn.type = 'button';
+  endBtn.className = 'btn week-time-btn';
+  endBtn.textContent = entry.end != null ? PayMath.formatTime(entry.end) : '—';
+  endBtn.addEventListener('click', () => {
+    promptTime({
+      title: fullName + ' end',
+      current: entry.end,
+      allowClear: true,
+      onDone: (minutes) => {
+        entry.end = minutes;
+        commitDay(worker, date);
+        renderWeek();
+      },
+    });
+  });
+
+  times.appendChild(startBtn);
+  times.appendChild(endBtn);
+
+  const hours = document.createElement('span');
+  hours.className = 'week-day-hours';
+  const worked = PayMath.workedMinutes(entry.start, entry.end);
+  hours.textContent = worked != null ? PayMath.toDecimal(worked).toFixed(2) : '—';
+
+  top.appendChild(label);
+  top.appendChild(times);
+  top.appendChild(hours);
+  row.appendChild(top);
+
+  if (entry.start != null && entry.end != null && entry.end <= entry.start) {
+    const note = document.createElement('p');
+    note.className = 'week-day-note';
+    note.textContent = 'End before start — not saved.';
+    row.appendChild(note);
+  }
 
   return row;
 }
