@@ -60,3 +60,8 @@ test('parseTimeDigits: bad meridiem values -> null', () => {
   assert.strictEqual(P.parseTimeDigits('630', 'am'), null);
   assert.strictEqual(P.parseTimeDigits('630', undefined), null);
 });
+test('grossEstimate: integer-cents math avoids 1-cent float errors', () => {
+  assert.strictEqual(P.grossEstimate(311, 0, 15.75), 81.59);   // 5.18h x 15.75
+  assert.strictEqual(P.grossEstimate(999, 0, 18.5), 308.03);   // 16.65h x 18.50
+  assert.strictEqual(P.grossEstimate(1310, 0, 18.5), 403.86);  // 21.83h x 18.50
+});

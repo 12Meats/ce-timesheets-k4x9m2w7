@@ -39,7 +39,11 @@
   // The estimate must match ADP's arithmetic, so it mirrors that rounding order.
   function grossEstimate(regMin, otMin, rate) {
     if (rate == null) return null;
-    return Math.round((toDecimal(regMin) * rate + toDecimal(otMin) * rate * 1.5) * 100) / 100;
+    const regHunHours = Math.round(toDecimal(regMin) * 100);  // hours in hundredths
+    const otHunHours = Math.round(toDecimal(otMin) * 100);
+    const rateCents = Math.round(rate * 100);
+    const totalCents = Math.round((regHunHours * rateCents + otHunHours * rateCents * 1.5) / 100);
+    return totalCents / 100;
   }
 
   function formatTime(minutes) {
