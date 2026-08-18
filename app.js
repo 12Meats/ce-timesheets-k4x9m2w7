@@ -13,7 +13,8 @@ const SCREENS = {
   'screen-workers': { title: 'Workers', back: null,             render: () => renderWorkers() },
   'screen-worker':  { title: 'Worker',  back: 'screen-workers', render: () => renderWorker() },
   'screen-week':    { title: 'Week',    back: 'screen-worker',  render: () => renderWeek() },
-  'screen-payday':  { title: 'Payday',  back: 'screen-workers', render: null }, // Task 8 sets render
+  'screen-payday':  { title: 'Payday',  back: 'screen-workers', render: () => renderPayday() },
+  'screen-settings': { title: 'Settings', back: 'screen-workers', render: () => renderSettings() },
 };
 
 let currentScreen = null;
@@ -375,6 +376,55 @@ function formatWeekRange(mondayIso) {
   return fmt(start) + ' – ' + fmt(end);
 }
 
+// Shared by renderWeek (Task 6) and renderPayday (Task 7): the ◀ label ▶
+// header. mondayIso is the week currently shown; onNav(newMondayIso) fires
+// when either arrow is tapped (caller updates state and re-renders). topLabel
+// is an optional bold line above the date range (renderWeek passes the
+// worker's name; renderPayday omits it since the screen spans all workers).
+function buildWeekNavHeader(mondayIso, onNav, topLabel) {
+  const nav = document.createElement('div');
+  nav.className = 'week-nav';
+
+  const prevBtn = document.createElement('button');
+  prevBtn.type = 'button';
+  prevBtn.className = 'week-nav-btn';
+  prevBtn.textContent = '◀';
+  prevBtn.setAttribute('aria-label', 'Previous week');
+  prevBtn.addEventListener('click', () => onNav(addDaysIso(mondayIso, -7)));
+
+  const nextBtn = document.createElement('button');
+  nextBtn.type = 'button';
+  nextBtn.className = 'week-nav-btn';
+  nextBtn.textContent = '▶';
+  nextBtn.setAttribute('aria-label', 'Next week');
+  nextBtn.addEventListener('click', () => onNav(addDaysIso(mondayIso, 7)));
+
+  const navLabel = document.createElement('div');
+  navLabel.className = 'week-nav-label';
+  if (topLabel) {
+    const nameEl = document.createElement('div');
+    nameEl.className = 'week-worker-name';
+    nameEl.textContent = topLabel;
+    navLabel.appendChild(nameEl);
+  }
+  const rangeEl = document.createElement('div');
+  rangeEl.className = 'week-range';
+  rangeEl.textContent = formatWeekRange(mondayIso);
+  navLabel.appendChild(rangeEl);
+
+  nav.appendChild(prevBtn);
+  nav.appendChild(navLabel);
+  nav.appendChild(nextBtn);
+  return nav;
+}
+
+// $1,168.64 — 2 decimals with thousands separators, for the payday screen's
+// "est." line. The value passed in is already rounded to whole cents by
+// PayMath.grossEstimate, so this only formats for display.
+function formatMoney(n) {
+  return n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
 // Every Monday that has at least one entry for this worker, most recent
 // first, capped at 26 weeks. Entries are only ever written when valid
 // (storage contract), so any entry present already means minutes > 0.
@@ -394,6 +444,8 @@ function getWorkerHistoryMondays(workerId) {
 // RULE for all render fns: build DOM via createElement/textContent. NEVER
 // innerHTML with interpolated user data (worker names are free text).
 function renderWorkers() {
+  renderBackupBanner();
+
   const listEl = document.getElementById('workersList');
   listEl.textContent = '';
 
@@ -779,44 +831,10 @@ function renderWeek() {
   }
 
   // ---- Top: worker name, week range, prev/next ----
-  const nav = document.createElement('div');
-  nav.className = 'week-nav';
-
-  const prevBtn = document.createElement('button');
-  prevBtn.type = 'button';
-  prevBtn.className = 'week-nav-btn';
-  prevBtn.textContent = '◀';
-  prevBtn.setAttribute('aria-label', 'Previous week');
-  prevBtn.addEventListener('click', () => {
-    state.currentMonday = addDaysIso(state.currentMonday, -7);
+  container.appendChild(buildWeekNavHeader(mondayIso, (newMonday) => {
+    state.currentMonday = newMonday;
     renderWeek();
-  });
-
-  const nextBtn = document.createElement('button');
-  nextBtn.type = 'button';
-  nextBtn.className = 'week-nav-btn';
-  nextBtn.textContent = '▶';
-  nextBtn.setAttribute('aria-label', 'Next week');
-  nextBtn.addEventListener('click', () => {
-    state.currentMonday = addDaysIso(state.currentMonday, 7);
-    renderWeek();
-  });
-
-  const navLabel = document.createElement('div');
-  navLabel.className = 'week-nav-label';
-  const nameEl = document.createElement('div');
-  nameEl.className = 'week-worker-name';
-  nameEl.textContent = worker.name;
-  const rangeEl = document.createElement('div');
-  rangeEl.className = 'week-range';
-  rangeEl.textContent = formatWeekRange(mondayIso);
-  navLabel.appendChild(nameEl);
-  navLabel.appendChild(rangeEl);
-
-  nav.appendChild(prevBtn);
-  nav.appendChild(navLabel);
-  nav.appendChild(nextBtn);
-  container.appendChild(nav);
+  }, worker.name));
 
   // ---- One row per day, Mon..Sun ----
   Store.weekDates(mondayIso).forEach((date, i) => {
@@ -938,6 +956,246 @@ function buildWeekDayRow(worker, date, shortName, fullName) {
   return row;
 }
 
+// ---------------------------------------------------------------------------
+// Task 7: Payday summary (screen-payday)
+// ---------------------------------------------------------------------------
+
+// The screen the owner reads straight into ADP: one row per worker with
+// hours this week, showing the exact rounded-decimal numbers he types in
+// (Reg / OT), plus an unofficial gross estimate when a rate is on file.
+function renderPayday() {
+  if (!state.currentMonday) state.currentMonday = Store.mondayOf(todayIso());
+  const mondayIso = state.currentMonday;
+
+  const container = document.getElementById('paydayContent');
+  container.textContent = '';
+
+  container.appendChild(buildWeekNavHeader(mondayIso, (newMonday) => {
+    state.currentMonday = newMonday;
+    renderPayday();
+  }));
+
+  const rows = [];
+  state.data.workers.forEach((worker) => {
+    const mins = Store.weekMinutes(state.data, worker.id, mondayIso);
+    if (mins > 0) rows.push({ worker, mins });
+  });
+
+  if (rows.length === 0) {
+    const p = document.createElement('p');
+    p.className = 'empty-state';
+    p.textContent = 'No hours entered for this week yet.';
+    container.appendChild(p);
+    return;
+  }
+
+  let totalRegMin = 0;
+  let totalOtMin = 0;
+  rows.forEach(({ worker, mins }) => {
+    const split = PayMath.splitOvertime(mins);
+    totalRegMin += split.regMin;
+    totalOtMin += split.otMin;
+    container.appendChild(buildPaydayRow(worker, split));
+  });
+
+  container.appendChild(buildPaydayTotals(totalRegMin, totalOtMin));
+}
+
+function buildPaydayRow(worker, split) {
+  const row = document.createElement('div');
+  row.className = 'payday-row';
+
+  const name = document.createElement('div');
+  name.className = 'payday-name';
+  name.textContent = worker.name;
+  row.appendChild(name);
+
+  const reg = document.createElement('div');
+  reg.className = 'payday-figure';
+  reg.textContent = 'Reg ' + PayMath.toDecimal(split.regMin).toFixed(2);
+  row.appendChild(reg);
+
+  if (split.otMin > 0) {
+    const ot = document.createElement('div');
+    ot.className = 'payday-figure';
+    ot.textContent = 'OT ' + PayMath.toDecimal(split.otMin).toFixed(2);
+    row.appendChild(ot);
+  }
+
+  if (worker.rate != null) {
+    const est = PayMath.grossEstimate(split.regMin, split.otMin, worker.rate);
+    if (est != null) {
+      const estEl = document.createElement('div');
+      estEl.className = 'payday-est';
+      estEl.textContent = 'est. $' + formatMoney(est) + ' — ADP is official';
+      row.appendChild(estEl);
+    }
+  }
+
+  return row;
+}
+
+// totalRegMin/totalOtMin are raw summed minutes across workers — converted to
+// decimal hours only here, never summed as already-rounded decimals (Store.
+// weekMinutes/PayMath.splitOvertime give exact minutes; rounding per-worker
+// first and adding those would drift from ADP's own weekly totals).
+function buildPaydayTotals(totalRegMin, totalOtMin) {
+  const row = document.createElement('div');
+  row.className = 'payday-totals';
+  row.textContent = 'Total: Reg ' + PayMath.toDecimal(totalRegMin).toFixed(2) +
+    ' / OT ' + PayMath.toDecimal(totalOtMin).toFixed(2);
+  return row;
+}
+
+// ---------------------------------------------------------------------------
+// Task 7: Backup reminder banner (rendered inside screen-workers)
+// ---------------------------------------------------------------------------
+
+// Separate localStorage key from Store.KEY on purpose: this is app metadata
+// (when did the owner last export?), never part of the timesheet data itself,
+// so it must never pass through Store.validateImport / a backup round-trip.
+const BACKUP_META_KEY = 'ce-timesheets-meta';
+const BACKUP_REMINDER_DAYS = 30;
+
+// Module variable, not persisted: dismissing the banner only hides it until
+// the next app load (page reload), per spec.
+let backupBannerDismissed = false;
+
+function getBackupMeta() {
+  try {
+    const raw = localStorage.getItem(BACKUP_META_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    if (!parsed || typeof parsed.lastExport !== 'string') return null;
+    return parsed;
+  } catch {
+    return null; // corrupted meta reads the same as "never exported"
+  }
+}
+
+function recordExport() {
+  try {
+    localStorage.setItem(BACKUP_META_KEY, JSON.stringify({ lastExport: todayIso() }));
+  } catch {
+    // localStorage unavailable — nothing to do, matches Store.save's fallback
+  }
+}
+
+function daysSince(iso) {
+  const then = new Date(iso + 'T12:00:00');
+  const now = new Date(todayIso() + 'T12:00:00');
+  return Math.round((now - then) / 86400000);
+}
+
+function renderBackupBanner() {
+  const area = document.getElementById('backupBannerArea');
+  area.textContent = '';
+  if (backupBannerDismissed) return;
+  if (state.data.workers.length === 0) return;
+
+  const meta = getBackupMeta();
+  const stale = !meta || daysSince(meta.lastExport) > BACKUP_REMINDER_DAYS;
+  if (!stale) return;
+
+  const banner = document.createElement('div');
+  banner.className = 'backup-banner';
+
+  const text = document.createElement('span');
+  text.className = 'backup-banner-text';
+  text.textContent = "It's been a while since your last backup — tap Send Data in Settings.";
+
+  const dismissBtn = document.createElement('button');
+  dismissBtn.type = 'button';
+  dismissBtn.className = 'backup-banner-dismiss';
+  dismissBtn.textContent = '✕';
+  dismissBtn.setAttribute('aria-label', 'Dismiss');
+  dismissBtn.addEventListener('click', () => {
+    backupBannerDismissed = true;
+    area.textContent = '';
+  });
+
+  banner.appendChild(text);
+  banner.appendChild(dismissBtn);
+  area.appendChild(banner);
+}
+
+// ---------------------------------------------------------------------------
+// Task 7: Settings (screen-settings) — Send Data / Import / Change PIN
+// ---------------------------------------------------------------------------
+
+// Nothing on this screen depends on which worker/week is current, so there's
+// no per-visit computation — the static controls are wired once at boot,
+// same pattern as screen-workers/screen-worker's static buttons. Registered
+// as SCREENS' render anyway so navigateTo('screen-settings') has a hook if a
+// later task needs one.
+function renderSettings() {}
+
+async function handleSendData() {
+  const filename = 'ce-timesheets-' + todayIso() + '.json';
+  const file = new File([JSON.stringify(state.data)], filename, { type: 'application/json' });
+
+  if (navigator.canShare && navigator.canShare({ files: [file] })) {
+    try {
+      await navigator.share({ files: [file], title: 'CE Timesheets backup' });
+      recordExport();
+    } catch (err) {
+      // User cancelling the share sheet throws AbortError — swallow silently
+      // and do NOT record an export, since nothing was actually sent.
+    }
+    return;
+  }
+
+  // Fallback for browsers without the Web Share API (typical on desktop):
+  // build a temporary object-URL download link, click it, then clean up.
+  const url = URL.createObjectURL(file);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+  recordExport(); // fallback path has no cancel signal, so record immediately
+}
+
+function handleImportFileChange(e) {
+  const input = e.currentTarget;
+  const file = input.files && input.files[0];
+  if (!file) return;
+
+  const reader = new FileReader();
+  reader.onload = () => {
+    const imported = Store.validateImport(String(reader.result));
+    if (imported === null) {
+      alert("That file isn't a CE Timesheets backup — nothing was changed.");
+      input.value = '';
+      return;
+    }
+    if (confirm('Replace ALL current data with this backup? This cannot be undone.')) {
+      state.data = imported;
+      Store.save(state.data);
+      navigateTo('screen-workers');
+    }
+    input.value = ''; // allow re-picking the same file next time
+  };
+  reader.onerror = () => {
+    alert("That file isn't a CE Timesheets backup — nothing was changed.");
+    input.value = '';
+  };
+  reader.readAsText(file);
+}
+
+function handleChangePin() {
+  state.data.pin = null;
+  Store.save(state.data);
+  // navigateTo('screen-pin') alone wouldn't reset pinMode/buffer — screen-pin
+  // is registered with render: null (see SCREENS) since boot is the only
+  // other caller and it always pairs navigateTo with an explicit
+  // initPinScreen() first. Do the same here so this shows choose+confirm.
+  initPinScreen();
+  navigateTo('screen-pin');
+}
+
 function deleteCurrentWorker() {
   const worker = getCurrentWorker();
   if (!worker) return;
@@ -978,14 +1236,12 @@ document.addEventListener('DOMContentLoaded', () => {
   // screen-workers static controls
   document.getElementById('addWorkerBtn').addEventListener('click', showAddWorkerForm);
   document.getElementById('paydaySummaryBtn').addEventListener('click', () => navigateTo('screen-payday'));
-  document.getElementById('settingsBtn').addEventListener('click', (e) => {
-    const btn = e.currentTarget;
-    if (btn.dataset.busy) return;
-    btn.dataset.busy = '1';
-    const original = btn.textContent;
-    btn.textContent = 'Settings — coming soon';
-    setTimeout(() => { btn.textContent = original; delete btn.dataset.busy; }, 1500);
-  });
+  document.getElementById('settingsBtn').addEventListener('click', () => navigateTo('screen-settings'));
+
+  // screen-settings static controls
+  document.getElementById('sendDataBtn').addEventListener('click', handleSendData);
+  document.getElementById('importFileInput').addEventListener('change', handleImportFileChange);
+  document.getElementById('changePinBtn').addEventListener('click', handleChangePin);
 
   // screen-worker static controls
   document.getElementById('enterHoursBtn').addEventListener('click', () => {

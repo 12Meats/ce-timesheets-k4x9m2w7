@@ -359,6 +359,33 @@
     /* ---------- Utilities ---------- */
     .mt-3 { margin-top: var(--space-3); }
 
+    /* ---------- Backup reminder banner (Task 7) ---------- */
+    .backup-banner {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: var(--space-2);
+      background: #fef3c7;
+      border: 1px solid #f59e0b;
+      color: #92400e;
+      border-radius: 12px;
+      padding: var(--space-2) var(--space-3);
+      margin-bottom: var(--space-3);
+      font-size: 0.95rem;
+    }
+    .backup-banner-text { flex: 1; }
+    .backup-banner-dismiss {
+      min-width: 48px;
+      min-height: 48px;
+      border: none;
+      background: transparent;
+      color: #92400e;
+      font-size: 1.3rem;
+      font-weight: 700;
+      border-radius: 10px;
+    }
+    .backup-banner-dismiss:active { background: rgba(146, 64, 14, 0.15); }
+
     /* ---------- Week entry screen (Task 6) ---------- */
     .week-nav {
       display: flex;
@@ -519,6 +546,41 @@
       margin: auto auto 0;
     }
     .time-panel-actions .btn { width: 100%; }
+
+    /* ---------- Payday summary (Task 7) ---------- */
+    .payday-row {
+      background: var(--color-surface);
+      border: 1px solid var(--color-border);
+      border-radius: 12px;
+      padding: var(--space-3);
+      margin-bottom: var(--space-2);
+    }
+    .payday-name { font-size: var(--font-lg); font-weight: 700; margin-bottom: 6px; }
+    .payday-figure { font-size: 1.6rem; font-weight: 800; color: var(--color-accent); }
+    .payday-est { margin-top: 6px; font-size: 0.9rem; color: var(--color-text-muted); }
+    .payday-totals {
+      margin-top: var(--space-4);
+      text-align: center;
+      padding: var(--space-3);
+      background: var(--color-surface);
+      border: 1px solid var(--color-border);
+      border-radius: 12px;
+      font-size: var(--font-lg);
+      font-weight: 700;
+    }
+
+    /* ---------- Settings screen (Task 7) ---------- */
+    .settings-file-label {
+      display: block;
+      width: 100%;
+      text-align: center;
+      box-sizing: border-box;
+    }
+    .settings-about {
+      color: var(--color-text-muted);
+      font-size: 0.9rem;
+      text-align: center;
+    }
   </style>
 </head>
 <body>
@@ -557,6 +619,7 @@
 
     <section id="screen-workers" class="screen" hidden>
       <div class="screen-content">
+        <div id="backupBannerArea"></div>
         <div id="workersList"></div>
         <div id="addWorkerArea"></div>
         <button type="button" id="addWorkerBtn" class="btn btn-primary btn-block">+ Add worker</button>
@@ -582,9 +645,22 @@
     </section>
 
     <section id="screen-payday" class="screen" hidden>
-      <div class="screen-content screen-placeholder">
-        <h2>Payday</h2>
-        <p>Payday summary goes here (Task 8).</p>
+      <div id="paydayContent" class="screen-content"></div>
+    </section>
+
+    <section id="screen-settings" class="screen" hidden>
+      <div class="screen-content">
+        <h3 class="section-heading">Backup</h3>
+        <button type="button" id="sendDataBtn" class="btn btn-primary btn-block">Send Data</button>
+
+        <h3 class="section-heading">Import Data</h3>
+        <label for="importFileInput" id="importDataLabel" class="btn btn-block settings-file-label">Import Data</label>
+        <input type="file" id="importFileInput" accept="application/json,.json" hidden>
+
+        <h3 class="section-heading">PIN</h3>
+        <button type="button" id="changePinBtn" class="btn btn-block">Change PIN</button>
+
+        <p id="aboutText" class="settings-about mt-3">CE Timesheets v1</p>
       </div>
     </section>
   </main>
