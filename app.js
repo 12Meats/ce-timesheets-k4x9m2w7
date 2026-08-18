@@ -1067,6 +1067,11 @@ function getBackupMeta() {
     if (!raw) return null;
     const parsed = JSON.parse(raw);
     if (!parsed || typeof parsed.lastExport !== 'string') return null;
+    // A lastExport that doesn't parse to a real date (corrupted value written
+    // by some future/older version, manual tampering, etc.) must NOT
+    // permanently suppress the reminder — treat it the same as "never
+    // exported" rather than returning meta that daysSince() can't use.
+    if (isNaN(new Date(parsed.lastExport + 'T12:00:00').getTime())) return null;
     return parsed;
   } catch {
     return null; // corrupted meta reads the same as "never exported"
@@ -1130,7 +1135,15 @@ function renderBackupBanner() {
 // later task needs one.
 function renderSettings() {}
 
+// Guards against a second Send Data tap firing a second share/download while
+// the first is still in flight (e.g. the share sheet takes a moment to open,
+// or a fast double-tap) — same rationale as promptTime's timePanelOpen guard.
+let sendDataBusy = false;
+
 async function handleSendData() {
+  if (sendDataBusy) return;
+  sendDataBusy = true;
+
   const filename = 'ce-timesheets-' + todayIso() + '.json';
   const file = new File([JSON.stringify(state.data)], filename, { type: 'application/json' });
 
@@ -1139,14 +1152,26 @@ async function handleSendData() {
       await navigator.share({ files: [file], title: 'CE Timesheets backup' });
       recordExport();
     } catch (err) {
-      // User cancelling the share sheet throws AbortError — swallow silently
-      // and do NOT record an export, since nothing was actually sent.
+      // User cancelling the share sheet throws AbortError — swallow
+      // silently and do NOT record an export, since nothing was actually
+      // sent. Any other failure (permission denied, OS share error, etc.)
+      // did send nothing either, but the owner should know it didn't work.
+      if (!(err && err.name === 'AbortError')) {
+        alert('Backup could not be sent — try again.');
+      }
+    } finally {
+      sendDataBusy = false;
     }
     return;
   }
 
   // Fallback for browsers without the Web Share API (typical on desktop):
   // build a temporary object-URL download link, click it, then clean up.
+  // This branch has no natural await point, so sendDataBusy is deliberately
+  // released inside the deferred revoke below rather than synchronously here
+  // — releasing it immediately would let a same-tick second tap (or a
+  // script-driven double click()) sail through the guard before it ever saw
+  // sendDataBusy flip back to false.
   const url = URL.createObjectURL(file);
   const a = document.createElement('a');
   a.href = url;
@@ -1154,8 +1179,11 @@ async function handleSendData() {
   document.body.appendChild(a);
   a.click();
   a.remove();
-  URL.revokeObjectURL(url);
   recordExport(); // fallback path has no cancel signal, so record immediately
+  setTimeout(() => {
+    URL.revokeObjectURL(url);
+    sendDataBusy = false;
+  }, 0);
 }
 
 function handleImportFileChange(e) {
@@ -1235,7 +1263,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // screen-workers static controls
   document.getElementById('addWorkerBtn').addEventListener('click', showAddWorkerForm);
-  document.getElementById('paydaySummaryBtn').addEventListener('click', () => navigateTo('screen-payday'));
+  document.getElementById('paydaySummaryBtn').addEventListener('click', () => {
+    state.currentMonday = Store.mondayOf(todayIso());
+    navigateTo('screen-payday');
+  });
   document.getElementById('settingsBtn').addEventListener('click', () => navigateTo('screen-settings'));
 
   // screen-settings static controls
