@@ -389,6 +389,72 @@
     }
     .backup-banner-dismiss:active { background: rgba(146, 64, 14, 0.15); }
 
+    /* ---------- Attendance flags + hours chart (Task 8) ---------- */
+    .flag-list { display: flex; flex-direction: column; }
+    .flag-row {
+      background: var(--color-warn-bg);
+      border: 1px solid var(--color-warn-border);
+      color: var(--color-warn-text);
+      border-radius: 10px;
+      padding: 10px 12px;
+      margin-bottom: 8px;
+      font-size: 0.95rem;
+    }
+    .flag-more {
+      color: var(--color-text-muted);
+      font-size: 0.85rem;
+      text-align: center;
+      padding: 2px 0 4px;
+    }
+    .attendance-ok {
+      background: rgba(21, 128, 61, 0.1);
+      border: 1px solid var(--color-confirm);
+      color: var(--color-confirm);
+      border-radius: 10px;
+      padding: 10px 12px;
+      font-size: 0.95rem;
+    }
+
+    .hours-chart-plot { margin-top: 4px; }
+    .hours-chart-bars-row {
+      position: relative;
+      display: flex;
+      align-items: flex-end;
+      gap: 4px;
+      height: 120px;
+      padding: 0 4px;
+      border-bottom: 1px solid var(--color-border);
+    }
+    .hours-chart-col-bar {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: flex-end;
+      height: 100%;
+      min-width: 0;
+    }
+    .hours-chart-value {
+      font-size: 0.7rem;
+      color: var(--color-text-muted);
+      margin-bottom: 2px;
+      white-space: nowrap;
+    }
+    .hours-chart-bar { width: 70%; max-width: 26px; background: var(--color-accent); border-radius: 3px 3px 0 0; }
+    .hours-chart-bar-zero { background: #cbd5e1; }
+    .hours-chart-40line { position: absolute; left: 0; right: 0; border-top: 1px dashed #94a3b8; pointer-events: none; }
+    .hours-chart-40label {
+      position: absolute;
+      left: 2px;
+      font-size: 0.65rem;
+      color: #94a3b8;
+      background: var(--color-surface);
+      padding: 0 2px;
+      line-height: 1;
+    }
+    .hours-chart-labels-row { display: flex; gap: 4px; padding: 0 4px; margin-top: 6px; }
+    .hours-chart-col-label { flex: 1; min-width: 0; text-align: center; font-size: 0.7rem; color: var(--color-text-muted); }
+
     /* ---------- Week entry screen (Task 6) ---------- */
     .week-nav {
       display: flex;

@@ -69,6 +69,59 @@
     return total;
   }
 
+  // Ascending list of `weeksBack` Mondays ending with the Monday of refIso
+  // (i.e. mondayOf(refIso) going back weeksBack-1 more weeks). Shared by
+  // lateDays/missedDays so both walk the exact same window.
+  function weeksBackList(refIso, weeksBack) {
+    const lastMonday = mondayOf(refIso);
+    const out = [];
+    for (let i = weeksBack - 1; i >= 0; i--) {
+      const dt = new Date(lastMonday + 'T12:00:00');
+      dt.setDate(dt.getDate() - i * 7);
+      out.push(dt.toISOString().slice(0, 10));
+    }
+    return out;
+  }
+
+  // Days in the last `weeksBack` full weeks (Mon..Sun, ending with the week
+  // containing refIso) where the worker's entry started more than graceMin
+  // minutes after usualStart. Returns [{date, start}] sorted ascending.
+  // usualStart null -> [].
+  function lateDays(data, workerId, usualStart, refIso, weeksBack, graceMin) {
+    if (usualStart == null) return [];
+    const days = data.entries[workerId] || {};
+    const out = [];
+    weeksBackList(refIso, weeksBack).forEach((monday) => {
+      weekDates(monday).forEach((date) => {
+        const e = days[date];
+        if (e && e.start > usualStart + graceMin) out.push({ date, start: e.start });
+      });
+    });
+    return out;
+  }
+
+  // Weekdays (Mon-Fri) in the last `weeksBack` full weeks up to the week of
+  // refIso where this worker has NO entry but at least one OTHER worker has
+  // an entry that day. Days after refIso (future) are excluded. Returns
+  // [date, ...] ascending.
+  function missedDays(data, workerId, refIso, weeksBack) {
+    const own = data.entries[workerId] || {};
+    const out = [];
+    weeksBackList(refIso, weeksBack).forEach((monday) => {
+      const dates = weekDates(monday);
+      for (let i = 0; i < 5; i++) {
+        const date = dates[i];
+        if (date > refIso) continue;
+        if (own[date]) continue;
+        const othersWorked = Object.keys(data.entries).some(
+          (id) => id !== workerId && data.entries[id] && data.entries[id][date]
+        );
+        if (othersWorked) out.push(date);
+      }
+    });
+    return out;
+  }
+
   // browser-only persistence (skipped under Node)
   function load() {
     try {
@@ -86,5 +139,5 @@
     }
   }
 
-  return { emptyData, validateImport, mondayOf, weekDates, weekMinutes, load, save, KEY };
+  return { emptyData, validateImport, mondayOf, weekDates, weekMinutes, lateDays, missedDays, load, save, KEY };
 });

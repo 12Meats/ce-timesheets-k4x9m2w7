@@ -551,8 +551,10 @@ function renderWorker() {
   const worker = getCurrentWorker();
   const fieldsEl = document.getElementById('workerFields');
   const historyEl = document.getElementById('workerHistory');
+  const extrasEl = document.getElementById('workerExtras');
   fieldsEl.textContent = '';
   historyEl.textContent = '';
+  extrasEl.textContent = '';
 
   if (!worker) {
     const p = document.createElement('p');
@@ -595,6 +597,9 @@ function renderWorker() {
       historyEl.appendChild(row);
     });
   }
+
+  extrasEl.appendChild(buildAttendanceSection(worker));
+  extrasEl.appendChild(buildHoursChart(worker));
 }
 
 function buildNameField(worker) {
@@ -722,6 +727,189 @@ function buildUsualStartField(worker) {
   row.appendChild(display);
 
   return row;
+}
+
+// ---------------------------------------------------------------------------
+// Task 8: Attendance flags + weekly hours chart (inside workerExtras)
+// ---------------------------------------------------------------------------
+
+const ATTENDANCE_WEEKS_BACK = 8;
+const ATTENDANCE_GRACE_MIN = 15;
+const ATTENDANCE_ROW_CAP = 10;
+
+// "Tue Aug 11" — short weekday + short month + day, used only for flag rows
+// (the week-history/nav "8/10" numeric style is formatShortDate, kept
+// separate since it reads better in a dense list here).
+function formatFlagDate(iso) {
+  const d = new Date(iso + 'T12:00:00');
+  const dayIdx = (d.getDay() + 6) % 7; // Mon=0 .. Sun=6, matches DAY_NAMES_SHORT
+  const month = d.toLocaleDateString('en-US', { month: 'short' });
+  return DAY_NAMES_SHORT[dayIdx] + ' ' + month + ' ' + d.getDate();
+}
+
+function buildFlagRow(item, worker) {
+  const row = document.createElement('div');
+  row.className = 'flag-row';
+  const text = document.createElement('span');
+  if (item.kind === 'late') {
+    text.textContent = formatFlagDate(item.date) + ' — in at ' + PayMath.formatTime(item.start) +
+      ' (usual ' + PayMath.formatTime(worker.usualStart) + ')';
+  } else {
+    text.textContent = formatFlagDate(item.date) + ' — no hours (others worked)';
+  }
+  row.appendChild(text);
+  return row;
+}
+
+// Renders up to ATTENDANCE_ROW_CAP rows (already sorted newest-first by the
+// caller) plus a "+N more" line when the list runs over the cap.
+function buildFlagList(items, worker) {
+  const list = document.createElement('div');
+  list.className = 'flag-list';
+  items.slice(0, ATTENDANCE_ROW_CAP).forEach((item) => list.appendChild(buildFlagRow(item, worker)));
+  if (items.length > ATTENDANCE_ROW_CAP) {
+    const more = document.createElement('p');
+    more.className = 'flag-more';
+    more.textContent = '+' + (items.length - ATTENDANCE_ROW_CAP) + ' more';
+    list.appendChild(more);
+  }
+  return list;
+}
+
+// Amber "information, not alarm" flags for late starts and missed weekdays.
+// Both derive from existing entries/worker data — nothing new is stored.
+function buildAttendanceSection(worker) {
+  const wrap = document.createElement('div');
+  const today = todayIso();
+  const missed = Store.missedDays(state.data, worker.id, today, ATTENDANCE_WEEKS_BACK);
+
+  // No usual start time on file -> lateDays is meaningless, so show only a
+  // missed-days section, and only when there's actually something to flag
+  // (no heading/noise for a worker with a clean record).
+  if (worker.usualStart == null) {
+    if (missed.length === 0) return wrap;
+    const heading = document.createElement('h3');
+    heading.className = 'section-heading';
+    heading.textContent = 'Missed days (last ' + ATTENDANCE_WEEKS_BACK + ' weeks)';
+    wrap.appendChild(heading);
+    const items = missed.slice().sort((a, b) => (a < b ? 1 : -1)).map((date) => ({ date, kind: 'missed' }));
+    wrap.appendChild(buildFlagList(items, worker));
+    return wrap;
+  }
+
+  const late = Store.lateDays(state.data, worker.id, worker.usualStart, today, ATTENDANCE_WEEKS_BACK, ATTENDANCE_GRACE_MIN);
+
+  const heading = document.createElement('h3');
+  heading.className = 'section-heading';
+  heading.textContent = 'Attendance (last ' + ATTENDANCE_WEEKS_BACK + ' weeks)';
+  wrap.appendChild(heading);
+
+  if (late.length === 0 && missed.length === 0) {
+    const ok = document.createElement('p');
+    ok.className = 'attendance-ok';
+    ok.textContent = 'No late or missed days in the last ' + ATTENDANCE_WEEKS_BACK + ' weeks.';
+    wrap.appendChild(ok);
+    return wrap;
+  }
+
+  const combined = late.map((l) => ({ date: l.date, kind: 'late', start: l.start }))
+    .concat(missed.map((date) => ({ date, kind: 'missed' })))
+    .sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0)); // newest first
+  wrap.appendChild(buildFlagList(combined, worker));
+  return wrap;
+}
+
+const HOURS_CHART_MAX_PX = 120;
+const HOURS_CHART_MIN_SCALE_MIN = 2400; // 40h floor so a light stretch doesn't look dramatic
+const HOURS_CHART_WEEKS = 8;
+
+// Ascending Mondays, oldest to newest, ending with the Monday of refIso.
+function lastNMondays(refIso, n) {
+  const lastMonday = Store.mondayOf(refIso);
+  const out = [];
+  for (let i = n - 1; i >= 0; i--) out.push(addDaysIso(lastMonday, -7 * i));
+  return out;
+}
+
+// Pure HTML/CSS bar chart, no libraries: one column per week (oldest left),
+// bar height proportional to paid hours scaled to the max week in range
+// (floored at 40h so a quiet 8 weeks doesn't read as a huge swing), value
+// label on top (hidden at 0), short Monday-date label beneath, and a dashed
+// 40h reference line across the plot.
+function buildHoursChart(worker) {
+  const wrap = document.createElement('div');
+  const heading = document.createElement('h3');
+  heading.className = 'section-heading';
+  heading.textContent = 'Hours per week';
+  wrap.appendChild(heading);
+
+  const mondays = lastNMondays(todayIso(), HOURS_CHART_WEEKS);
+  const weekMins = mondays.map((m) => Store.weekMinutes(state.data, worker.id, m));
+
+  if (weekMins.every((m) => m === 0)) {
+    const p = document.createElement('p');
+    p.className = 'empty-state';
+    p.textContent = 'No hours recorded yet.';
+    wrap.appendChild(p);
+    return wrap;
+  }
+
+  const maxScale = Math.max(HOURS_CHART_MIN_SCALE_MIN, ...weekMins);
+
+  const plot = document.createElement('div');
+  plot.className = 'hours-chart-plot';
+
+  const barsRow = document.createElement('div');
+  barsRow.className = 'hours-chart-bars-row';
+
+  const lineTop = HOURS_CHART_MAX_PX - (HOURS_CHART_MIN_SCALE_MIN / maxScale) * HOURS_CHART_MAX_PX;
+  const line = document.createElement('div');
+  line.className = 'hours-chart-40line';
+  line.style.top = lineTop + 'px';
+  barsRow.appendChild(line);
+
+  const lineLabel = document.createElement('span');
+  lineLabel.className = 'hours-chart-40label';
+  lineLabel.textContent = '40';
+  lineLabel.style.top = Math.max(0, lineTop - 7) + 'px';
+  barsRow.appendChild(lineLabel);
+
+  weekMins.forEach((mins) => {
+    const col = document.createElement('div');
+    col.className = 'hours-chart-col-bar';
+
+    const valueEl = document.createElement('div');
+    valueEl.className = 'hours-chart-value';
+    valueEl.textContent = mins > 0 ? PayMath.toDecimal(mins).toFixed(1) : '';
+
+    const bar = document.createElement('div');
+    if (mins > 0) {
+      bar.className = 'hours-chart-bar';
+      bar.style.height = Math.max(2, (mins / maxScale) * HOURS_CHART_MAX_PX) + 'px';
+    } else {
+      bar.className = 'hours-chart-bar hours-chart-bar-zero';
+      bar.style.height = '2px';
+    }
+
+    col.appendChild(valueEl);
+    col.appendChild(bar);
+    barsRow.appendChild(col);
+  });
+
+  plot.appendChild(barsRow);
+
+  const labelsRow = document.createElement('div');
+  labelsRow.className = 'hours-chart-labels-row';
+  mondays.forEach((m) => {
+    const lbl = document.createElement('span');
+    lbl.className = 'hours-chart-col-label';
+    lbl.textContent = formatShortDate(m);
+    labelsRow.appendChild(lbl);
+  });
+  plot.appendChild(labelsRow);
+
+  wrap.appendChild(plot);
+  return wrap;
 }
 
 // ---------------------------------------------------------------------------

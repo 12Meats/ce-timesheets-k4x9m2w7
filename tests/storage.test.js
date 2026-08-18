@@ -83,3 +83,27 @@ test('mondayOf is stable across DST-transition weeks', () => {
   assert.strictEqual(S.mondayOf('2026-03-08'), '2026-03-02'); // US spring-forward Sunday
   assert.strictEqual(S.mondayOf('2026-11-01'), '2026-10-26'); // US fall-back Sunday
 });
+test('lateDays flags starts past grace, ignores null usualStart', () => {
+  const d = S.emptyData();
+  d.workers.push({ id: 'a', name: 'A', rate: null, usualStart: 390 });
+  d.entries['a'] = {
+    '2026-08-10': { start: 390, end: 900, lunch: 30 },   // on time
+    '2026-08-11': { start: 404, end: 900, lunch: 30 },   // 14 late, within 15 grace
+    '2026-08-12': { start: 425, end: 900, lunch: 30 },   // 35 late -> flagged
+  };
+  const late = S.lateDays(d, 'a', 390, '2026-08-16', 8, 15);
+  assert.deepStrictEqual(late, [{ date: '2026-08-12', start: 425 }]);
+  assert.deepStrictEqual(S.lateDays(d, 'a', null, '2026-08-16', 8, 15), []);
+});
+test('missedDays: weekday gaps only when others worked, no future days', () => {
+  const d = S.emptyData();
+  d.workers.push({ id: 'a', name: 'A', rate: null, usualStart: null },
+                 { id: 'b', name: 'B', rate: null, usualStart: null });
+  d.entries['a'] = { '2026-08-10': { start: 390, end: 900, lunch: 30 } }; // Mon only
+  d.entries['b'] = { '2026-08-10': { start: 390, end: 900, lunch: 30 },
+                     '2026-08-11': { start: 390, end: 900, lunch: 30 },   // Tue: b worked, a didn't -> a missed
+                     '2026-08-15': { start: 390, end: 900, lunch: 30 } }; // Sat: not a weekday -> never missed
+  assert.deepStrictEqual(S.missedDays(d, 'a', '2026-08-13', 1), ['2026-08-11']);
+  // Wed 8/12: nobody worked -> not missed. Thu 8/13 is refIso day: a has no entry, b has none -> not missed. Fri future -> excluded.
+  assert.deepStrictEqual(S.missedDays(d, 'b', '2026-08-13', 1), []);
+});
