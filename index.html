@@ -2,15 +2,267 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
   <title>CE Timesheets</title>
+  <meta name="theme-color" content="#1d4ed8">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-title" content="CE Timesheets">
+  <style>
+    :root {
+      --color-accent: #1d4ed8;
+      --color-accent-dark: #1e3a8a;
+      --color-confirm: #15803d;
+      --color-danger: #b91c1c;
+      --color-bg: #f8fafc;
+      --color-surface: #ffffff;
+      --color-text: #0f172a;
+      --color-text-muted: #475569;
+      --color-border: #cbd5e1;
+      --font: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    }
+
+    * { box-sizing: border-box; }
+
+    html, body {
+      margin: 0;
+      padding: 0;
+      background: var(--color-bg);
+      color: var(--color-text);
+      font-family: var(--font);
+      -webkit-tap-highlight-color: transparent;
+      overscroll-behavior-y: contain;
+    }
+
+    body {
+      min-height: 100vh;
+      min-height: 100dvh;
+    }
+
+    h1, h2, h3, p { margin: 0; }
+
+    button {
+      font-family: inherit;
+      -webkit-tap-highlight-color: transparent;
+      touch-action: manipulation;
+    }
+
+    /* ---------- Top bar ---------- */
+    .topbar {
+      position: sticky;
+      top: 0;
+      z-index: 10;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      min-height: 56px;
+      padding: 8px 12px;
+      padding-top: calc(8px + env(safe-area-inset-top));
+      background: var(--color-accent);
+      color: #ffffff;
+    }
+    .topbar[hidden] { display: none; }
+
+    .back-btn {
+      appearance: none;
+      border: none;
+      background: transparent;
+      color: #ffffff;
+      font-size: 1.1rem;
+      font-weight: 600;
+      min-width: 48px;
+      min-height: 48px;
+      padding: 0 10px;
+      border-radius: 10px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 4px;
+    }
+    .back-btn:active { background: rgba(255, 255, 255, 0.18); }
+    .back-btn[hidden] { display: none; }
+
+    .topbar-title {
+      flex: 1;
+      font-size: 1.25rem;
+      font-weight: 700;
+      text-align: center;
+      padding-right: 48px; /* balance the back button so title stays visually centered */
+    }
+
+    /* ---------- Screens ---------- */
+    .screen[hidden] { display: none; }
+
+    .screen-placeholder {
+      padding: 24px 20px;
+      font-size: 1.15rem;
+      color: var(--color-text-muted);
+    }
+
+    /* ---------- PIN screen ---------- */
+    .pin-screen {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      min-height: 100dvh;
+      padding: 32px 24px;
+      padding-top: calc(32px + env(safe-area-inset-top));
+      padding-bottom: calc(32px + env(safe-area-inset-bottom));
+      gap: 28px;
+      text-align: center;
+    }
+
+    .app-name {
+      font-size: 2rem;
+      font-weight: 800;
+      color: var(--color-accent);
+      letter-spacing: -0.02em;
+    }
+
+    .pin-message {
+      font-size: 1.15rem;
+      font-weight: 600;
+      color: var(--color-text-muted);
+      min-height: 1.5em;
+    }
+
+    .pin-dots {
+      display: flex;
+      gap: 18px;
+    }
+
+    .dot {
+      width: 22px;
+      height: 22px;
+      border-radius: 50%;
+      border: 3px solid var(--color-accent);
+      background: transparent;
+      transition: background-color 0.15s ease;
+    }
+    .dot.filled { background: var(--color-accent); }
+
+    @keyframes shake {
+      10%, 90% { transform: translateX(-4px); }
+      20%, 80% { transform: translateX(8px); }
+      30%, 50%, 70% { transform: translateX(-14px); }
+      40%, 60% { transform: translateX(14px); }
+    }
+    .pin-dots.shake { animation: shake 0.5s; }
+    .pin-dots.shake .dot { border-color: var(--color-danger); }
+
+    .keypad {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 14px;
+      width: 100%;
+      max-width: 340px;
+    }
+
+    .key {
+      min-height: 68px;
+      font-size: 1.6rem;
+      font-weight: 600;
+      border-radius: 14px;
+      border: 1px solid var(--color-border);
+      background: var(--color-surface);
+      color: var(--color-text);
+      box-shadow: 0 1px 2px rgba(15, 23, 42, 0.06);
+    }
+    .key:active { background: #e2e8f0; }
+
+    .key-blank {
+      visibility: hidden;
+      pointer-events: none;
+      border: none;
+      box-shadow: none;
+      background: transparent;
+    }
+
+    .key-back {
+      color: var(--color-danger);
+      font-size: 1.4rem;
+    }
+
+    /* ---------- Shared building blocks for later screens ---------- */
+    .btn {
+      min-height: 48px;
+      font-size: 1.05rem;
+      font-weight: 600;
+      border-radius: 12px;
+      border: 1px solid var(--color-border);
+      background: var(--color-surface);
+      color: var(--color-text);
+      padding: 12px 18px;
+    }
+    .btn-primary { background: var(--color-accent); border-color: var(--color-accent); color: #fff; }
+    .btn-confirm { background: var(--color-confirm); border-color: var(--color-confirm); color: #fff; }
+    .btn-danger { background: var(--color-danger); border-color: var(--color-danger); color: #fff; }
+  </style>
 </head>
 <body>
-  <section id="screen-pin"></section>
-  <section id="screen-workers" hidden></section>
-  <section id="screen-worker" hidden></section>
-  <section id="screen-week" hidden></section>
-  <section id="screen-payday" hidden></section>
+  <header id="topbar" class="topbar" hidden>
+    <button type="button" id="backBtn" class="back-btn" hidden aria-label="Back">&#8249; Back</button>
+    <h1 id="topbarTitle" class="topbar-title"></h1>
+  </header>
+
+  <main>
+    <section id="screen-pin" class="screen">
+      <div class="pin-screen">
+        <h1 class="app-name">CE Timesheets</h1>
+        <p id="pinMessage" class="pin-message" aria-live="polite">Enter PIN</p>
+        <div id="pinDots" class="pin-dots" aria-hidden="true">
+          <span class="dot"></span>
+          <span class="dot"></span>
+          <span class="dot"></span>
+          <span class="dot"></span>
+        </div>
+        <div class="keypad">
+          <button type="button" class="key" data-digit="1">1</button>
+          <button type="button" class="key" data-digit="2">2</button>
+          <button type="button" class="key" data-digit="3">3</button>
+          <button type="button" class="key" data-digit="4">4</button>
+          <button type="button" class="key" data-digit="5">5</button>
+          <button type="button" class="key" data-digit="6">6</button>
+          <button type="button" class="key" data-digit="7">7</button>
+          <button type="button" class="key" data-digit="8">8</button>
+          <button type="button" class="key" data-digit="9">9</button>
+          <button type="button" class="key key-blank" tabindex="-1" aria-hidden="true" disabled></button>
+          <button type="button" class="key" data-digit="0">0</button>
+          <button type="button" class="key key-back" id="backspaceBtn" aria-label="Backspace">&#9003;</button>
+        </div>
+      </div>
+    </section>
+
+    <section id="screen-workers" class="screen" hidden>
+      <div class="screen-placeholder">
+        <h2>Workers</h2>
+        <p>Worker list goes here (Task 5).</p>
+      </div>
+    </section>
+
+    <section id="screen-worker" class="screen" hidden>
+      <div class="screen-placeholder">
+        <h2>Worker</h2>
+        <p>Worker detail goes here (Task 6).</p>
+      </div>
+    </section>
+
+    <section id="screen-week" class="screen" hidden>
+      <div class="screen-placeholder">
+        <h2>Week</h2>
+        <p>Week entry goes here (Task 7).</p>
+      </div>
+    </section>
+
+    <section id="screen-payday" class="screen" hidden>
+      <div class="screen-placeholder">
+        <h2>Payday</h2>
+        <p>Payday summary goes here (Task 8).</p>
+      </div>
+    </section>
+  </main>
 
   <script src="paymath.js"></script>
   <script src="storage.js"></script>
