@@ -1406,6 +1406,10 @@ function handleImportFileChange(e) {
     if (confirm('Replace ALL current data with this backup? This cannot be undone.')) {
       state.data = imported;
       Store.save(state.data);
+      // Imported data invalidates any cached week draft — without this, a
+      // previously-viewed week renders (and can write back) pre-import values.
+      weekDraft = null;
+      weekDraftKey = null;
       navigateTo('screen-workers');
     }
     input.value = ''; // allow re-picking the same file next time
