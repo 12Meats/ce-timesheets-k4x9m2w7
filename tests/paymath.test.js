@@ -95,3 +95,18 @@ test('isValidPair: contract predicate', () => {
   assert.strictEqual(P.isValidPair(0, 1439), true);
   assert.strictEqual(P.isValidPair(390, 1440), false);
 });
+
+test('exactPay: exact minutes times the rate, rounded once to the cent', () => {
+  // 8 hr 8 min at $30: 488 min -> $244.00 exactly.
+  assert.strictEqual(P.exactPay(488, 0, 30), 244);
+  // 40 hr + 2 hr 30 min OT at $30: 1200 + 112.50.
+  assert.strictEqual(P.exactPay(2400, 150, 30), 1312.5);
+  // 7 min at $30 is $3.50; 1 min at $30 is 50 cents; 1 min at $31 is 51.67 -> 0.52.
+  assert.strictEqual(P.exactPay(7, 0, 30), 3.5);
+  assert.strictEqual(P.exactPay(1, 0, 30), 0.5);
+  assert.strictEqual(P.exactPay(1, 0, 31), 0.52);
+  // It is not the rounded-hours figure: 8 hr 8 min is 8.13 h in ADP's world.
+  assert.strictEqual(P.grossEstimate(488, 0, 30), 243.9);
+  assert.strictEqual(P.exactPay(0, 0, 30), 0);
+  assert.strictEqual(P.exactPay(480, 0, null), null);
+});

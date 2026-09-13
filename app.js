@@ -504,10 +504,11 @@ function renderWorkers() {
       hours.textContent = PayMath.toDecimal(mins).toFixed(2) + ' hrs this week';
 
       // What the week comes to in dollars, so he never does the multiplication
-      // himself. Same arithmetic as the Payday screen (PayMath.grossEstimate,
-      // rounded decimal hours times the rate, overtime past 40 at time and a
-      // half), so the two screens can never disagree. No rate on file: say
-      // where to put one instead of showing nothing.
+      // himself. Exact minutes times the rate (PayMath.exactPay), overtime past
+      // 40 at time and a half: the way he pays a cash worker, total time to
+      // the minute times the rate. Payday keeps the rounded-hours figure
+      // because that one has to match ADP; the two can differ by cents, on
+      // purpose. No rate on file: say where to put one instead of nothing.
       const pay = document.createElement('div');
       pay.className = 'worker-card-pay';
       pay.textContent = weekPayText(mins, w.rate);
@@ -533,8 +534,8 @@ function weekPayText(mins, rate) {
   if (mins <= 0) return '';
   if (rate == null) return 'Set a rate to see pay';
   const split = PayMath.splitOvertime(mins);
-  const est = PayMath.grossEstimate(split.regMin, split.otMin, rate);
-  return est == null ? '' : '$' + formatMoney(est) + ' this week';
+  const pay = PayMath.exactPay(split.regMin, split.otMin, rate);
+  return pay == null ? '' : '$' + formatMoney(pay) + ' this week';
 }
 
 function showAddWorkerForm() {

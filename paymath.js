@@ -75,6 +75,18 @@
     return totalCents / 100;
   }
 
+  // Cash pay: exact minutes times the rate, overtime past 40 at time and a
+  // half, rounded to the cent once at the end. This is the number the owner
+  // works out by hand for a worker he pays in cash (total hours to the minute
+  // times the rate), so it is NOT the ADP-mirroring grossEstimate above: that
+  // one rounds the hours first because ADP does. Integer cents throughout.
+  function exactPay(regMin, otMin, rate) {
+    if (rate == null) return null;
+    const rateCents = Math.round(rate * 100);
+    const cents = Math.round((regMin * rateCents + otMin * rateCents * 1.5) / 60);
+    return cents / 100;
+  }
+
   // "8 hr 8 min" / "8 hr" / "45 min" — low-emphasis sub-display of paid time
   // next to the prominent decimal hours. Pure minutes-in, phrase-out; no
   // rounding involved (paidMinutes is already a whole-minute integer).
@@ -93,5 +105,5 @@
     return h + ':' + String(m).padStart(2, '0') + ' ' + mer;
   }
 
-  return { parseTimeDigits, workedMinutes, paidMinutes, toDecimal, splitOvertime, grossEstimate, formatTime, formatDuration, guessMeridiem, isValidPair };
+  return { parseTimeDigits, workedMinutes, paidMinutes, toDecimal, splitOvertime, grossEstimate, exactPay, formatTime, formatDuration, guessMeridiem, isValidPair };
 });

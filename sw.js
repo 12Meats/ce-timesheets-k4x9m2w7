@@ -1,6 +1,6 @@
 // CE Timesheets service worker — cache-first offline support.
 // Bump CACHE on every deploy that changes any file in ASSETS.
-const CACHE = 'ce-v4';
+const CACHE = 'ce-v5';
 const ASSETS = [
   'index.html',
   'app.js',
