@@ -26,6 +26,7 @@ The app link:
 3. For each day, tap **Start**, type the time straight off the paper sheet (like `630`), tap **AM** or **PM** if it guessed wrong, tap **Done**. Same for **End**. No scroll wheels, ever.
 4. **Lunch:** every full day automatically takes out 30 minutes for lunch. If someone worked through lunch that day, tap the little **"Lunch 30 min"** button on that day's row and it flips to "No lunch."
 5. The hours math happens by itself — daily totals, the weekly total, and overtime past 40 hours.
+6. Back on the workers screen, each name shows this week's hours and what they come to in dollars (once the worker has a rate on file). Same math as Payday: the rounded hours times the rate, overtime at time and a half.
 
 ## Payday
 

@@ -503,8 +503,19 @@ function renderWorkers() {
       const mins = Store.weekMinutes(state.data, w.id, monday);
       hours.textContent = PayMath.toDecimal(mins).toFixed(2) + ' hrs this week';
 
+      // What the week comes to in dollars, so he never does the multiplication
+      // himself. Same arithmetic as the Payday screen (PayMath.grossEstimate,
+      // rounded decimal hours times the rate, overtime past 40 at time and a
+      // half), so the two screens can never disagree. No rate on file: say
+      // where to put one instead of showing nothing.
+      const pay = document.createElement('div');
+      pay.className = 'worker-card-pay';
+      pay.textContent = weekPayText(mins, w.rate);
+      if (w.rate == null) pay.classList.add('worker-card-pay-hint');
+
       card.appendChild(name);
       card.appendChild(hours);
+      card.appendChild(pay);
       card.addEventListener('click', () => {
         state.currentWorkerId = w.id;
         navigateTo('screen-worker');
@@ -515,6 +526,15 @@ function renderWorkers() {
 
   // Any open add-worker form belongs to the previous render; drop it.
   document.getElementById('addWorkerArea').textContent = '';
+}
+
+// "$1,168.64 this week" / "Set a rate to see pay" / "" (no hours yet).
+function weekPayText(mins, rate) {
+  if (mins <= 0) return '';
+  if (rate == null) return 'Set a rate to see pay';
+  const split = PayMath.splitOvertime(mins);
+  const est = PayMath.grossEstimate(split.regMin, split.otMin, rate);
+  return est == null ? '' : '$' + formatMoney(est) + ' this week';
 }
 
 function showAddWorkerForm() {
